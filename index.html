@@ -573,27 +573,40 @@
   zoneGroup.addTo(map); badgeGroup.addTo(map);
 
   /* ---------- locksmith density + pins ---------- */
+  /* Built as a function, not inline: the rows arrive from Supabase after the map
+     is created, so this has to be re-run once points[] is actually populated. */
   var heatLayer = null;
-  if(window.L && L.heatLayer){
-    heatLayer = L.heatLayer(points.map(function(p){return [p.lat,p.lng,0.6];}),
-      {radius:34, blur:26, maxZoom:13,
-       gradient:{0.2:'#2e9e5b',0.45:'#c8d92e',0.65:'#e0a32e',1:'#cf4034'}});
-    heatLayer.addTo(map);
-  }
   var lsGroup = L.layerGroup(), lsMarkers = {};
-  points.forEach(function(p, idx){
-    var m = L.circleMarker([p.lat,p.lng], {radius:p.label?6.5:5, color:'#fff', weight:1.4,
-                                           fillColor:'#b3261e', fillOpacity:.95});
-    m.addTo(lsGroup);
-    lsMarkers[idx] = m;
-    if(p.label){
-      var dir = p.lng > 151.10 ? 'left' : 'right';
-      m.bindTooltip(L.tooltip({permanent:true, direction:dir, offset:[dir==='left'?-8:8,0],
-                               className:'ls-label', opacity:1})
-        .setContent('<span>'+p.n+'</span><span class="addr">'+p.a+'</span>'));
-    }
-  });
   lsGroup.addTo(map);
+  function drawLocksmiths(){
+    lsGroup.clearLayers();
+    lsMarkers = {};
+    if(heatLayer){ map.removeLayer(heatLayer); heatLayer = null; }
+    var heatOn = true, lsOn = true;
+    var cbH = document.getElementById('tHeat'), cbL = document.getElementById('tLs');
+    if(cbH) heatOn = cbH.checked;
+    if(cbL) lsOn = cbL.checked;
+    if(window.L && L.heatLayer && points.length){
+      heatLayer = L.heatLayer(points.map(function(p){return [p.lat,p.lng,0.6];}),
+        {radius:34, blur:26, maxZoom:13,
+         gradient:{0.2:'#2e9e5b',0.45:'#c8d92e',0.65:'#e0a32e',1:'#cf4034'}});
+      if(heatOn) heatLayer.addTo(map);
+    }
+    points.forEach(function(p, idx){
+      var m = L.circleMarker([p.lat,p.lng], {radius:p.label?6.5:5, color:'#fff', weight:1.4,
+                                             fillColor:'#b3261e', fillOpacity:.95});
+      m.addTo(lsGroup);
+      lsMarkers[idx] = m;
+      if(p.label){
+        var dir = p.lng > 151.10 ? 'left' : 'right';
+        m.bindTooltip(L.tooltip({permanent:true, direction:dir, offset:[dir==='left'?-8:8,0],
+                                 className:'ls-label', opacity:1})
+          .setContent('<span>'+p.n+'</span><span class="addr">'+p.a+'</span>'));
+      }
+    });
+    if(lsOn){ if(!map.hasLayer(lsGroup)) map.addLayer(lsGroup); }
+    else { map.removeLayer(lsGroup); }
+  }
 
   /* ---------- job layers, rebuilt whenever the filter changes ---------- */
   var openGroup = L.layerGroup(), doneGroup = L.layerGroup(),
@@ -871,6 +884,7 @@
 
   /* ---------- go ---------- */
   function start(){
+    drawLocksmiths();             // pins + density need the rows Supabase just returned
     renderList();                 // the locksmith list needs the rows Supabase just returned
     map.fitBounds(SYD, {padding:[10,10]});
     apply(false);
