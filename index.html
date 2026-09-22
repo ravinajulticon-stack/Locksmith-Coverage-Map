@@ -156,9 +156,44 @@
   .toolbar button{padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
                    color:var(--ink); font-family:'Inter',sans-serif; font-size:.78rem; font-weight:600; cursor:pointer;}
   .toolbar button:hover{background:var(--surface-2);}
+
+  /* ------------------------------------------------------------ sign-in gate */
+  #gate{position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
+        background:#0f1216; padding:16px;}
+  #gate .card{width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line);
+              border-radius:14px; padding:26px 24px; box-shadow:0 18px 50px rgba(0,0,0,.45);}
+  #gate h2{margin:0 0 4px; font-size:1.05rem; letter-spacing:.2px;}
+  #gate .sub{margin:0 0 18px; font-size:.8rem; color:var(--muted); line-height:1.45;}
+  #gate label{display:block; font-size:.72rem; font-weight:600; letter-spacing:.4px;
+              text-transform:uppercase; color:var(--muted); margin:0 0 5px;}
+  #gate input{width:100%; box-sizing:border-box; padding:9px 11px; margin:0 0 14px; border-radius:8px;
+              border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+              font-family:'Inter',sans-serif; font-size:.85rem;}
+  #gate input:focus{outline:2px solid #2e7d4f; outline-offset:1px;}
+  #gate button{width:100%; padding:10px; border-radius:8px; border:0; background:#1b7f4b; color:#fff;
+               font-family:'Inter',sans-serif; font-size:.85rem; font-weight:700; cursor:pointer;}
+  #gate button:hover{background:#166b3f;}
+  #gate button[disabled]{opacity:.6; cursor:default;}
+  #gate .err{margin:12px 0 0; font-size:.78rem; color:#f2a3a3; min-height:1em;}
+  #btnOut{margin-left:8px;}
 </style>
 </head>
 <body>
+
+<div id="gate">
+  <div class="card">
+    <h2>DDL Group &ndash; Locksmith Coverage</h2>
+    <p class="sub">This map contains customer names and addresses. Sign in with the DDL account to view it.</p>
+    <form id="gateForm" autocomplete="on">
+      <label for="gEmail">Email</label>
+      <input id="gEmail" type="email" autocomplete="username" required>
+      <label for="gPass">Password</label>
+      <input id="gPass" type="password" autocomplete="current-password" required>
+      <button id="gBtn" type="submit">Sign In</button>
+      <p class="err" id="gErr"></p>
+    </form>
+  </div>
+</div>
 
 <div class="load-msg" id="loadMsg">Loading locksmiths and jobs from Supabase…</div>
 
@@ -224,6 +259,7 @@
   <button type="button" id="btnKey">Street Tiles…</button>
   <button type="button" id="btnSyd" style="margin-left:auto">Greater Sydney</button>
   <button type="button" id="btnAll">Fit All Jobs</button>
+  <button type="button" id="btnOut">Sign Out</button>
 </div>
 
 <div class="city-row" id="cityRow"></div>
@@ -310,9 +346,11 @@
   var points = [], jobs = [], regionRows = D.regionRows, cities = D.cities;
   var DMIN = D.dateMin, DMAX = D.dateMax;
 
+  var SB_TOKEN = null;            /* set once the viewer has signed in */
+
   function sbFetch(table, cb){
     var url = SB_URL + '/rest/v1/' + table + '?select=*&limit=5000';
-    fetch(url, {headers:{apikey:SB_KEY, Authorization:'Bearer '+SB_KEY}})
+    fetch(url, {headers:{apikey:SB_KEY, Authorization:'Bearer '+(SB_TOKEN || SB_KEY)}})
       .then(function(r){ if(!r.ok) throw new Error(table+' '+r.status); return r.json(); })
       .then(function(rows){ cb(null, rows); })
       .catch(function(e){ cb(e); });
@@ -909,6 +947,9 @@
     start();
   }
 
+  var jobRows = null, lsIn = false;
+
+  function loadData(){
   sbFetch('locksmith_businesses', function(err, rows){
     if(err) return loadError(err);
     points = (rows||[]).filter(function(r){ return r.lat && r.lng && r.is_active !== false; })
@@ -919,7 +960,6 @@
     maybeStartWhenJobsIn();
   });
 
-  var jobRows = null, lsIn = false;
   function maybeStartWhenJobsIn(){ lsIn = true; if(jobRows) finish(); else maybeStart(); }
   function finish(){
     jobs = jobRows.map(function(j){ return attachNearest(j); });
@@ -953,6 +993,65 @@
     }
     if(lsIn) finish(); else { jobRows = jobRows; }
   });
+  }
+
+  /* -------------------------------------------------------------- sign-in gate
+     The reads below are refused unless the request carries a token for a real
+     Supabase user, so the key published in this file is not enough on its own. */
+  var gate = document.getElementById('gate'),
+      gForm = document.getElementById('gateForm'),
+      gBtn  = document.getElementById('gBtn'),
+      gErr  = document.getElementById('gErr'),
+      STORE = 'ddl_lsmap_session';
+
+  function store(v){ try{ v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); }catch(e){} }
+  function stored(){ try{ return localStorage.getItem(STORE); }catch(e){ return null; } }
+
+  function openMap(token){
+    SB_TOKEN = token;
+    store(token);
+    gate.style.display = 'none';
+    loadData();
+  }
+
+  function signOut(){
+    store(null);
+    location.reload();
+  }
+
+  gForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    gErr.textContent = '';
+    gBtn.disabled = true; gBtn.textContent = 'Signing in\u2026';
+    fetch(SB_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: {apikey: SB_KEY, 'Content-Type': 'application/json'},
+      body: JSON.stringify({email: document.getElementById('gEmail').value.trim(),
+                            password: document.getElementById('gPass').value})
+    })
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(res){
+      if(res.ok && res.j.access_token){ openMap(res.j.access_token); return; }
+      gErr.textContent = (res.j && (res.j.error_description || res.j.msg || res.j.message))
+                         || 'Sign-in failed. Check the email and password.';
+      gBtn.disabled = false; gBtn.textContent = 'Sign In';
+    })
+    .catch(function(){
+      gErr.textContent = 'Could not reach the server. Check your connection.';
+      gBtn.disabled = false; gBtn.textContent = 'Sign In';
+    });
+  });
+
+  /* a token from a previous visit, if it is still valid */
+  document.getElementById('btnOut').addEventListener('click', signOut);
+
+  (function resume(){
+    var t = stored();
+    if(!t) return;
+    fetch(SB_URL + '/auth/v1/user', {headers:{apikey: SB_KEY, Authorization:'Bearer '+t}})
+      .then(function(r){ if(r.ok) openMap(t); else store(null); })
+      .catch(function(){});
+  })();
 })();
 </script>
 </body>
