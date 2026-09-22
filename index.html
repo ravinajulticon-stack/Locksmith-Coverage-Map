@@ -1,572 +1,944 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Philips Display Rollout — Status Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greater Sydney Locksmith Coverage Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root {
-    --navy: #1F4E78; --navy-dark: #163a58; --ink: #1a2733; --muted: #64748b;
-    --bg-page: #f4f6f9; --bg-card: #ffffff; --border: #e2e8f0;
-    --nsw: #4A90D9; --vic: #E8834E; --sa: #6FAE71; --wa: #E0B94F; --qld: #B570A0;
-    --red: #C0392B; --amber: #E0B94F; --green: #2e9e5b;
-    --red-bg: #FDECEA; --amber-bg: #FFF7E0; --green-bg: #EAF7EF;
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  :root{
+    --bg:#eef1f4; --surface:#ffffff; --surface-2:#f4f6f8; --ink:#16212e; --muted:#5d6b7a;
+    --line:#dbe2ea; --navy:#1b3a5c; --east:#1f6fb2; --central:#d2691e; --west:#2e7d4f;
+    --good:#2e9e5b; --mid:#e0a32e; --bad:#cf4034; --cust:#1b7f4b;
+    --shadow:0 1px 2px rgba(16,33,46,.08), 0 10px 26px -14px rgba(16,33,46,.35);
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg-page); font-family: 'Segoe UI', Arial, sans-serif; color: var(--ink); }
-  #root { max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }
-
-  .header { text-align: center; margin-bottom: 18px; position: relative; }
-  .header h1 { font-size: 26px; font-weight: 700; color: var(--navy-dark); margin: 0 0 4px; letter-spacing: -0.3px; }
-  .status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--muted); background: #F1F5F9; padding: 3px 10px; border-radius: 20px; margin-top: 4px; }
-  .live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--green); background: var(--green-bg); padding: 3px 10px; border-radius: 20px; margin-top: 4px; }
-  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
-  .print-btn { position: absolute; top: 0; right: 0; background: var(--navy); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-  .print-btn:hover { background: var(--navy-dark); }
-
-  .upload-panel { background: var(--bg-card); border: 1px dashed #b9c4d1; border-radius: 12px; padding: 16px 20px; margin-bottom: 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .upload-panel .utext { flex: 1; min-width: 220px; }
-  .upload-panel .utitle { font-size: 13px; font-weight: 700; color: var(--navy-dark); margin-bottom: 2px; }
-  .upload-panel .usub { font-size: 11.5px; color: var(--muted); }
-  .file-btn { background: #EAF1FA; color: var(--navy); border: 1px solid #cfe0f2; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-  .add-btn { background: var(--navy); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
-  .add-btn:disabled { background: #b9c4d1; cursor: not-allowed; }
-  .upload-status { font-size: 11.5px; margin-top: 6px; width: 100%; }
-  .upload-status.ok { color: var(--green); }
-  .upload-status.err { color: var(--red); }
-
-  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-  .kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-  .kpi .num-row { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
-  .kpi .num { font-size: 28px; font-weight: 800; color: var(--navy-dark); line-height: 1.1; }
-  .kpi .trend { font-size: 11.5px; font-weight: 700; }
-  .kpi .trend.up-bad { color: var(--red); }
-  .kpi .trend.down-good { color: var(--green); }
-  .kpi .trend.flat { color: var(--muted); }
-  .kpi .label { font-size: 10.5px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-
-  .section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-  .section h2 { font-size: 14.5px; font-weight: 700; color: var(--navy-dark); margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
-  .section h2 svg { flex-shrink: 0; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-  .state-bars { display: flex; flex-direction: column; gap: 10px; }
-  .state-row { display: grid; grid-template-columns: 44px 1fr 30px; align-items: center; gap: 10px; }
-  .state-name { font-size: 12.5px; font-weight: 600; }
-  .bar-track { background: #f1f5f9; border-radius: 6px; height: 18px; overflow: hidden; }
-  .bar-fill { height: 100%; border-radius: 6px; transition: width 1s ease; }
-  .state-count { font-size: 12.5px; font-weight: 700; text-align: right; }
-
-  .issue-card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-  .issue-card { border-radius: 10px; padding: 16px 6px; text-align: center; }
-  .issue-card-state { font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
-  .issue-card-num { font-size: 26px; font-weight: 800; line-height: 1.3; }
-  .issue-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
-
-  .product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-  .product-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-  .product-card .pname { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
-  .product-track { background: #f1f5f9; border-radius: 5px; height: 13px; overflow: hidden; margin-bottom: 6px; }
-  .product-fill { height: 100%; border-radius: 5px; background: var(--navy); transition: width 1s ease; }
-  .product-meta { font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; }
-
-  .trend-chart { display: flex; align-items: flex-end; justify-content: center; }
-  .trend-scroll { overflow-x: auto; max-width: 100%; padding-bottom: 4px; }
-  .trend-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 8px; }
-
-  .pipeline { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; max-width: 480px; margin: 0 auto; }
-  .pipeline-group-label { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
-  .pipeline-divider { height: 1px; background: var(--border); margin: 14px 0; }
-  .pipe-stage { flex: 1; text-align: center; border-radius: 10px; padding: 14px 8px; border: 1px solid var(--border); }
-  .pipe-stage .pnum { font-size: 22px; font-weight: 800; }
-  .pipe-stage .plabel { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
-  .pipe-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; }
-  .stage-new { background: #F1F5F9; } .stage-new .pnum { color: #475569; }
-  .stage-carried { background: var(--amber-bg); } .stage-carried .pnum { color: #8a6d00; }
-  .stage-resolved { background: var(--green-bg); } .stage-resolved .pnum { color: var(--green); }
-
-  .group { border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; border: 1px solid; }
-  .group-red { background: var(--red-bg); border-color: #f3c7c2; }
-  .group-amber { background: var(--amber-bg); border-color: #f0dca0; }
-  .group-green { background: var(--green-bg); border-color: #bfe6cd; }
-  .group h2 { font-size: 14px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
-  .group-red h2 { color: var(--red); } .group-amber h2 { color: #8a6d00; } .group-green h2 { color: var(--green); }
-  .step-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: #ffffff; font-size: 12px; font-weight: 800; flex-shrink: 0; }
-  .step-badge-red { background: var(--red); } .step-badge-amber { background: var(--amber); color: #4a3b00; } .step-badge-green { background: var(--green); }
-
-  .item-list { display: flex; flex-direction: column; gap: 8px; }
-  .item { background: #ffffff; border-radius: 8px; padding: 10px 14px; border: 1px solid rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .item-main { display: flex; align-items: center; gap: 8px; }
-  .state-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-  .item-store { font-size: 12.5px; font-weight: 700; }
-  .item-detail { font-size: 11px; color: var(--muted); }
-  .item-badges { display: flex; gap: 6px; flex-shrink: 0; }
-  .pill { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
-  .pill-days-high { background: #FDECEA; color: var(--red); }
-  .pill-days-low { background: #F1F5F9; color: var(--muted); }
-  .pill-soh { background: #EAF1FA; color: var(--navy); }
-  .pill-soh-zero { background: var(--red-bg); color: var(--red); }
-  .empty-note { font-size: 12px; color: var(--muted); font-style: italic; }
-
-  .legend-row { display: flex; gap: 16px; font-size: 11px; color: var(--muted); justify-content: center; flex-wrap: wrap; margin-top: 4px; }
-  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-
-  .footer-list { list-style: none; counter-reset: footnote; padding: 0; margin: 8px 0 0; font-size: 11px; color: var(--muted); text-align: left; max-width: 640px; margin-left: auto; margin-right: auto; }
-  .footer-list li { counter-increment: footnote; position: relative; padding-left: 20px; margin-bottom: 4px; }
-  .footer-list li::before { content: counter(footnote) "."; position: absolute; left: 0; font-weight: 700; color: var(--navy-dark); }
-
-  @media print {
-    body { background: #ffffff; }
-    .print-btn, .upload-panel { display: none; }
-    .section, .kpi, .group { box-shadow: none; break-inside: avoid; }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10161d; --surface:#18212b; --surface-2:#1f2932; --ink:#eaf0f6; --muted:#9fb0c0;
+      --line:#2b3947; --navy:#0f2a45;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -16px rgba(0,0,0,.8);
+    }
   }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; padding:22px 26px 56px;}
+  h1{font-size:1.5rem; font-weight:800; margin:0;}
+  h2{font-size:1rem; font-weight:700; margin:0 0 2px;}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow);}
+  .panel-sub{color:var(--muted); font-size:.8rem; margin-bottom:12px;}
+
+  /* ---- map frame + overlays (reference layout) ---- */
+  #mapFrame{position:relative; width:100%; height:78vh; min-height:620px; border-radius:12px; overflow:hidden;
+            border:1px solid var(--line); box-shadow:var(--shadow); background:#dfe6ec;}
+  #leafletMap{position:absolute; inset:0;}
+  .ov{position:absolute; z-index:500; pointer-events:none;}
+  .ov.interactive{pointer-events:auto;}
+  .title-banner{top:0; left:0; z-index:600; background:var(--navy); color:#fff; padding:12px 22px 12px 18px; border-bottom-right-radius:10px; max-width:min(62%,720px);}
+  .title-banner h1{font-size:clamp(1rem,1.9vw,1.55rem); line-height:1.15;}
+  .title-banner .tagline{font-size:clamp(.7rem,1.05vw,.9rem); opacity:.85; margin-top:3px;}
+  .footer-banner{bottom:0; left:0; background:var(--navy); color:#fff; padding:10px 22px 10px 18px; border-top-right-radius:10px;}
+  .footer-banner .t{font-weight:700; font-size:.9rem;}
+  .footer-banner .s{font-size:.72rem; opacity:.85;}
+  .disclaimer{top:10px; right:10px; background:rgba(255,255,255,.94); color:#16212e; border:1px solid #cdd7e1; border-radius:8px;
+              padding:8px 11px; font-size:.7rem; font-style:italic; line-height:1.35; max-width:230px;}
+  .side-stack{top:92px; right:10px; display:flex; flex-direction:column; gap:8px; width:238px;}
+  .card{background:rgba(255,255,255,.95); border:1px solid #cdd7e1; border-radius:8px; padding:9px 11px; color:#16212e;}
+  .card h4{margin:0 0 6px; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#1b3a5c;}
+  .key-row{display:flex; align-items:center; gap:7px; font-size:.7rem; margin-bottom:4px; line-height:1.25;}
+  .key-row:last-child{margin-bottom:0;}
+  .sw{width:13px; height:13px; border-radius:3px; flex:none; border:1px solid rgba(0,0,0,.18);}
+  .sw.round{border-radius:50%; width:11px; height:11px;}
+  .sw.lineswatch{height:0; border:0; border-top:2px dashed #5d6b7a; border-radius:0;}
+  .sw.lineswatch.solid{border-top:3px solid #5d6b7a;}
+  .ramp{height:12px; border-radius:3px; background:linear-gradient(90deg,#2e9e5b,#e0a32e,#cf4034); margin:3px 0 4px;}
+  .ramp-labels{display:flex; justify-content:space-between; font-size:.63rem; color:#5d6b7a;}
+  #insetBox{width:238px;}
+  #insetSvg{width:100%; height:112px; display:block;}
+  .inset-cap{font-size:.63rem; color:#5d6b7a; text-align:center; margin-top:2px;}
+  #mapMsg{display:none; bottom:16px; left:50%; transform:translateX(-50%); max-width:min(64%,540px);
+          background:#fdf3d6; border:1px solid #e3c877; color:#5c4708; border-radius:8px;
+          padding:7px 12px; font-size:.78rem; z-index:650; text-align:center;}
+  #mapMsg.bad{background:#fbe4e1; border-color:#e0a79f; color:#7a2b21;}
+  .leaflet-control-layers{font-family:'Inter',sans-serif; font-size:.78rem;}
+  #mapFrame.offline-base{background:#f2efe6;}
+  #mapFrame.offline-base.offline-wide{background:#cfe0e8;}
+  .place{position:absolute; transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+         display:flex; align-items:center; gap:3px;}
+  .place i{width:3px; height:3px; border-radius:50%; background:#8b9aa8; flex:none;}
+  .place span{font-family:'Inter',sans-serif; font-size:9px; color:#6a7b88;
+              text-shadow:0 0 3px #f2efe6, 0 0 3px #f2efe6;}
+  .place.major i{width:5px; height:5px; background:#4a5a68;}
+  .place.major span{font-size:11px; font-weight:600; color:#3b4a56;
+                    text-shadow:0 0 4px #f2efe6, 0 0 4px #f2efe6;}
+  .leaflet-top.leaflet-left .leaflet-control-layers{margin-top:100px;}
+  .north{bottom:124px; right:12px; background:rgba(255,255,255,.92); border:1px solid #cdd7e1; border-radius:8px;
+         width:38px; height:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#16212e;}
+  .north .arrow{font-size:1rem; line-height:1;}
+  .north .n{font-size:.68rem; font-weight:700;}
+  @media (max-width:980px){
+    .side-stack{display:none;}
+    .title-banner{max-width:78%;}
+  }
+
+  /* city badge markers */
+  .city-badge{background:rgba(255,255,255,.95); border-left:5px solid var(--bdg,#1b3a5c); border-radius:7px; padding:6px 9px;
+              box-shadow:0 2px 8px rgba(16,33,46,.25); width:205px; color:#16212e;}
+  .city-badge .cb-t{font-weight:700; font-size:.78rem; line-height:1.15;}
+  .city-badge .cb-c{font-size:.66rem; color:#43505e; margin-top:2px;}
+  .city-badge .cb-s{font-size:.66rem; color:#1b3a5c; margin-top:3px; font-weight:600;}
+  .leaflet-tooltip.ls-label{background:rgba(255,255,255,.95); border:1px solid #cdd7e1; border-radius:6px; color:#16212e;
+                            font-family:'Inter',sans-serif; font-size:.68rem; font-weight:600; padding:3px 6px; box-shadow:0 1px 4px rgba(0,0,0,.2);}
+  .leaflet-tooltip.ls-label .addr{display:block; font-weight:400; color:#5d6b7a; font-size:.64rem;}
+  .leaflet-tooltip.ls-label:before{display:none;}
+  .leaflet-popup-content{font-family:'Inter',sans-serif; font-size:.8rem; line-height:1.4;}
+  .leaflet-popup-content b{display:block;}
+
+  .toolbar{display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin:12px 0 0; font-size:.8rem; color:var(--muted);}
+  .toolbar label{display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
+  .toolbar input{accent-color:var(--navy); width:14px; height:14px; cursor:pointer;}
+
+  .city-row{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0 6px;}
+  @media (max-width:820px){.city-row{grid-template-columns:1fr;}}
+  .city-card{background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--cc,#1b3a5c);
+             border-radius:11px; padding:13px 15px; box-shadow:var(--shadow);}
+  .city-card .cc-name{font-weight:700; font-size:.95rem;}
+  .city-card .cc-centre{color:var(--muted); font-size:.74rem; margin-top:1px;}
+  .cc-nums{display:flex; gap:16px; margin-top:9px; flex-wrap:wrap;}
+  .cc-num .v{font-family:'IBM Plex Mono',monospace; font-size:1.15rem; font-weight:500;}
+  .cc-num .k{color:var(--muted); font-size:.68rem;}
+
+  table{width:100%; border-collapse:collapse; font-size:.85rem;}
+  thead th{text-align:left; font-weight:600; color:var(--muted); font-size:.7rem; text-transform:uppercase;
+           letter-spacing:.05em; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  tbody td{padding:8px 0; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.name{font-weight:500;}
+  td.addr-cell{color:var(--muted); font-size:.79rem;}
+  td.count{text-align:right; font-family:'IBM Plex Mono',monospace; width:2.6em;}
+  th.mins, td.mins{text-align:right; white-space:nowrap; font-family:'IBM Plex Mono',monospace; width:6.2em; padding-right:12px;}
+  .pill{display:inline-block; padding:1px 7px; border-radius:20px; font-size:.68rem; font-weight:600; color:#fff;}
+  .layout{display:grid; grid-template-columns:1.45fr 1fr; gap:16px; align-items:start; margin-top:16px;}
+  @media (max-width:900px){.layout{grid-template-columns:1fr;}}
+  .list-controls{display:flex; gap:9px; flex-wrap:wrap; margin-bottom:10px;}
+  .list-controls input[type="search"],.list-controls select{
+    padding:7px 11px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);
+    font-family:'Inter',sans-serif; font-size:.83rem;}
+  .list-controls input[type="search"]{flex:1; min-width:150px;}
+  .list-count{color:var(--muted); font-size:.75rem; margin-bottom:8px;}
+  .list-scroll{max-height:460px; overflow-y:auto; border:1px solid var(--line); border-radius:9px;}
+  .list-scroll thead th{position:sticky; top:0; background:var(--surface); padding:9px 12px; z-index:1;}
+  .list-scroll tbody td{padding:8px 12px;}
+  .note{margin-top:18px; background:var(--surface-2); border:1px solid var(--line); border-radius:11px;
+        padding:0; font-size:.83rem; color:var(--muted); line-height:1.55;}
+  .note b{color:var(--ink);}
+  .note > summary{
+    list-style:none; cursor:pointer; padding:12px 17px; display:flex; align-items:center; gap:8px;
+    font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink); font-weight:600;
+    user-select:none; border-radius:11px;
+  }
+  .note > summary::-webkit-details-marker{display:none;}
+  .note > summary::before{
+    content:''; width:0; height:0; flex:none; transition:transform .15s ease;
+    border-left:5px solid currentColor; border-top:4px solid transparent; border-bottom:4px solid transparent;
+  }
+  .note[open] > summary::before{transform:rotate(90deg);}
+  .note > summary:hover{background:var(--line); }
+  .note[open] > summary{border-bottom:1px solid var(--line); border-radius:11px 11px 0 0;}
+  .note .note-body{padding:14px 17px;}
+
+  #mapFrame.hide-labels .leaflet-tooltip.ls-label{display:none;}
+  .datebar{margin-bottom:2px;}
+  .datebar .bar-label{font-weight:600; color:var(--ink); font-size:.8rem;}
+  .datebar input[type="date"]{padding:5px 9px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink); font-family:'Inter',sans-serif; font-size:.78rem;
+    min-width:148px; color-scheme:light dark;}
+  .range-label{margin-left:auto; font-size:.78rem; color:var(--muted);}
+  .toolbar button{padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
+                   color:var(--ink); font-family:'Inter',sans-serif; font-size:.78rem; font-weight:600; cursor:pointer;}
+  .toolbar button:hover{background:var(--surface-2);}
 </style>
 </head>
 <body>
-<div id="root">Loading…</div>
+
+<div class="load-msg" id="loadMsg">Loading locksmiths and jobs from Supabase…</div>
+
+<div id="mapFrame">
+  <div id="leafletMap"></div>
+
+  <div class="ov title-banner">
+    <h1>Greater Sydney &ndash; Locksmith Coverage</h1>
+    <div class="tagline">Three Cities. Stronger Communities. Faster Call-outs.</div>
+  </div>
+
+  <div class="ov disclaimer">Indicative coverage from Google business listings; DDL work orders geocoded to suburb level.</div>
+
+  <div class="ov interactive side-stack">
+    <div class="card">
+      <h4>Drive Time to Nearest Locksmith</h4>
+      <div class="ramp"></div>
+      <div class="ramp-labels"><span>~5 min</span><span>~20 min</span><span>60 min+</span></div>
+      <div class="key-row" style="margin-top:7px;"><span class="sw round" style="background:#b3261e"></span> Locksmith Business</div>
+      <div class="key-row"><span class="sw round" style="background:#1b7f4b"></span> Open DDL Work Order</div>
+      <div class="key-row"><span class="sw round" style="background:#4f7fa8"></span> Completed DDL Job</div>
+      <div class="key-row"><span class="sw lineswatch solid" style="width:15px"></span> Work Order &rarr; Nearest Locksmith</div>
+      <div class="key-row"><span class="sw" style="background:rgba(31,111,178,.25); border-color:#1f6fb2"></span> Eastern Harbour City</div>
+      <div class="key-row"><span class="sw" style="background:rgba(210,105,30,.25); border-color:#d2691e"></span> Central River City</div>
+      <div class="key-row"><span class="sw" style="background:rgba(46,125,79,.25); border-color:#2e7d4f"></span> Western Parkland City</div>
+    </div>
+    <div class="card" id="insetBox">
+      <h4>Location</h4>
+      <svg id="insetSvg" aria-label="New South Wales locator"></svg>
+      <div class="inset-cap">New South Wales</div>
+    </div>
+  </div>
+
+  <div class="ov footer-banner">
+    <div class="t">DDL Group &middot; NSW Locksmith Network</div>
+    <div class="s" id="headRange">NSW jobs only</div>
+  </div>
+
+  <div class="ov interactive" id="mapMsg"></div>
+
+  <div class="ov north"><div class="arrow">&#9650;</div><div class="n">N</div></div>
+</div>
+
+<div class="toolbar datebar">
+  <span class="bar-label">Date Range</span>
+  <button type="button" id="presetAll">All Time</button>
+  <button type="button" id="preset90">Last 90 Days</button>
+  <button type="button" id="preset60">Last 60 Days</button>
+  <button type="button" id="preset30">Last 30 Days</button>
+  <input type="date" id="dateFrom"> <span style="color:var(--muted)">to</span> <input type="date" id="dateTo">
+  <span id="rangeLabel" class="range-label"></span>
+</div>
+
+<div class="toolbar">
+  <label><input type="checkbox" id="tHeat" checked> Density Shading</label>
+  <label><input type="checkbox" id="tLs" checked> Locksmiths</label>
+  <label><input type="checkbox" id="tWo" checked> Open Work Orders</label>
+  <label><input type="checkbox" id="tDone" checked> Completed Jobs</label>
+  <label><input type="checkbox" id="tLine" checked> Work Order Lines</label>
+  <label><input type="checkbox" id="tDoneLine"> Completed Job Lines</label>
+  <label><input type="checkbox" id="tZone" checked> Three Cities Zones</label>
+  <label><input type="checkbox" id="tLabel" checked> Pin Labels</label><span id="labelHint" style="font-size:.74rem; color:var(--muted);"></span>
+  <button type="button" id="btnKey">Street Tiles…</button>
+  <button type="button" id="btnSyd" style="margin-left:auto">Greater Sydney</button>
+  <button type="button" id="btnAll">Fit All Jobs</button>
+</div>
+
+<div class="city-row" id="cityRow"></div>
+<div style="color:var(--muted); font-size:.78rem; margin-bottom:4px;">Covers <b>all NSW jobs</b>, not only Sydney &mdash; the map simply opens framed on Greater Sydney, where most of them sit. 2 open work orders and 31 completed jobs fall outside Greater Sydney (Googong, Moss Vale, the Hunter, Central Coast and further); zoom out or press Fit All Jobs to see them. Three Cities zones are indicative bands drawn to match the Greater Sydney Commission's framing &mdash; they are not the official LGA boundaries.</div>
+
+<div class="layout">
+  <div class="panel">
+    <h2>DDL Jobs, Worst Coverage First</h2>
+    <div class="panel-sub">Every NSW job in the selected date range, with the estimated drive time from the nearest mapped locksmith</div>
+    <div class="list-controls">
+      <input type="search" id="jobSearch" placeholder="Search customer, suburb or locksmith&hellip;">
+      <select id="jobStatus">
+        <option value="">Open + Completed</option>
+        <option value="Open">Open Work Orders Only</option>
+        <option value="Done">Completed Only</option>
+      </select>
+    </div>
+    <div class="list-count" id="jobCount"></div>
+    <div class="list-scroll">
+      <table>
+        <thead><tr><th>Customer / Job</th><th>Suburb</th><th>Status</th><th>Date</th><th>City</th><th class="mins">Est. Drive</th><th>Nearest Locksmith</th></tr></thead>
+        <tbody id="woBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Key Locations Shown</h2>
+    <div class="panel-sub">Locksmiths that are nearest to at least one DDL job in the selected range</div>
+    <div class="list-count" id="keyCount"></div>
+    <div class="list-scroll">
+      <table>
+        <thead><tr><th class="count">#</th><th>Business</th><th>Address</th><th class="count">Open</th><th class="count">Done</th></tr></thead>
+        <tbody id="keyBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="panel">
+    <h2>Full Locksmith List</h2>
+    <div class="panel-sub">All 126 businesses &mdash; search by name/suburb or filter by region</div>
+    <div class="list-controls">
+      <input type="search" id="listSearch" placeholder="Search name or suburb&hellip;">
+      <select id="listRegionFilter"><option value="">All Regions</option></select>
+    </div>
+    <div class="list-count" id="listCount"></div>
+    <div class="list-scroll">
+      <table>
+        <thead><tr><th>Business</th><th>Suburb</th><th>Region</th><th>Address</th></tr></thead>
+        <tbody id="fullListBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>By Region</h2>
+    <div class="panel-sub">Listings found, macro-region</div>
+    <div class="list-scroll">
+      <table>
+        <thead><tr><th>Region</th><th class="count">Count</th></tr></thead>
+        <tbody id="regionTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<details class="note">
+  <summary>How to Read This</summary>
+  <div class="note-body">
+  This is <b>not</b> the official NSW licensing register &mdash; NSW does not publish a bulk-downloadable list of licensed locksmiths (Service NSW / NSW Fair Trading only offer a one-at-a-time licence check). The 126 locksmiths plotted here are <b>businesses currently listed on Google</b>, gathered from 30 targeted area searches on 18&nbsp;Sep&nbsp;2026 and de-duplicated. A locksmith can hold a NSW licence without a Google listing, and mobile-only operators may show an approximate service address.<br><br>
+  <b>Scope: NSW jobs only.</b> The job export covers all states &mdash; 1,443 jobs, of which 617 are in NSW, 561 in VIC, 108 in QLD and the rest spread across SA, ACT, WA and TAS. Only the NSW ones are plotted here, because the 126 locksmiths mapped were gathered from NSW searches, so a nearest-locksmith distance can only be calculated honestly for NSW jobs. The export covers <b>4 Jan 2026 to 21 Sep 2026</b>, and the date filter above the map applies to both job layers, the city cards and both tables. Note the two layers naturally cover different windows: completed jobs accumulate across the whole nine months, while 30 of the 38 open work orders are dated August or September, since older ones have since been closed out — so narrow the range to compare like with like. Within NSW, two layers are shown: the 38 <b>open work orders</b> (Job Status = &ldquo;Work Order&rdquo;, green) and the 412 <b>completed jobs</b> (Job Status = &ldquo;Completed&rdquo;, blue, at 387 distinct addresses since some repeat). The 167 NSW jobs marked &ldquo;Unsuccessful&rdquo; are not plotted. Both layers are geocoded to suburb/postcode centroids rather than exact street addresses, so treat each pin as accurate to roughly a kilometre. Each job is joined to its nearest mapped locksmith; the <b>drive time is an estimate</b> from straight-line distance (about 30km/h for the first 15km, 70km/h beyond), not a routed trip, so check real directions before committing to a call-out window.<br><br>
+  The <b>Three Cities</b> zones follow the Greater Sydney Commission's Eastern Harbour / Central River / Western Parkland framing, but are drawn as indicative bands here rather than official LGA boundaries. The street basemap loads live when you open this file, so you need an internet connection to see it &mdash; all pins, tables and figures work without one. The map ships with a <b>built-in basemap</b> &mdash; the NSW outline plus suburb and town names, all held inside this file &mdash; so it always draws something, with no tile server, no API key and no internet connection. On opening, it also tests three free <b>street map</b> sources and switches to the first that genuinely works; you can pick one yourself from the layers button at the top-left. The test compares two tiles from far-apart places, because a blocked or key-gated tile still arrives as a valid image &mdash; that is why an earlier version filled the map with &ldquo;Access Blocked&rdquo; squares. If a source fails the test the map falls straight back to the built-in one and says why. Street tiles generally need this page served from a web address rather than opened off your computer; the <b>Street Tiles</b> button accepts a free MapTiler key if you want them to work locally, stored only in your own browser. Suburb names come from the Australian postcode dataset, placed at locality centroids; the state outline shows only when zoomed out, as it is not detailed enough to pass for a coastline up close. Place data &copy; OpenStreetMap contributors.
+  </div>
+</details>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script>
-const MASTER = [{"state": "NSW", "store": 7313, "name": "Alexandria Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7174, "name": "Artarmon Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7175, "name": "Ashfield Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7304, "name": "Balgowlah Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7086, "name": "Bankstown Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7168, "name": "Belrose Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7342, "name": "Blacktown Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7364, "name": "Bonnyrigg Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7386, "name": "Campbelltown Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7219, "name": "Caringbah Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7314, "name": "Castle Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7216, "name": "Chatswood Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7082, "name": "Dural Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7316, "name": "Eastgardens Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7334, "name": "Gladesville Warehouse", "models": ["DDL709", "7300-5HB"]}, {"state": "NSW", "store": 7315, "name": "Greenacre Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7379, "name": "Gregory Hills Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7376, "name": "Hoxton Park Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7361, "name": "Katoomba Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7319, "name": "Kingsgrove Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7213, "name": "Kirrawee Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7222, "name": "Leppington Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7173, "name": "Lidcombe Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7318, "name": "Marsden Park Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7096, "name": "McGraths Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7021, "name": "Mittagong Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7214, "name": "Narellan Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7159, "name": "Narrabeen Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7063, "name": "North Penrith Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7384, "name": "Northmead Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7351, "name": "Padstow Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7151, "name": "Penrith Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7346, "name": "Pymble Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7071, "name": "Rockdale Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7310, "name": "Rouse Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7373, "name": "Rozelle Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7333, "name": "Rydalmere Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7212, "name": "Seven Hills Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7369, "name": "Smithfield NSW Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7152, "name": "Thornleigh Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7161, "name": "Valley Heights Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7179, "name": "Villawood Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "NSW", "store": 7130, "name": "Warringah Mall SFS", "models": ["7300-5HB"]}, {"state": "NSW", "store": 7106, "name": "Minchinbury Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6404, "name": "Altona Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6228, "name": "Bayswater Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6035, "name": "Box Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6126, "name": "Broadmeadows Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6386, "name": "Caroline Springs Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6427, "name": "Carrum Downs Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6428, "name": "Chadstone Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6437, "name": "Clyde North Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6310, "name": "Coburg Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6425, "name": "Collingwood Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6385, "name": "Craigieburn Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6201, "name": "Cranbourne Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6118, "name": "Croydon Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6439, "name": "Dandenong Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6402, "name": "Doncaster Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6433, "name": "East Pakenham Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6037, "name": "Eltham Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6401, "name": "Epping Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6443, "name": "Fairfield Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6461, "name": "Narre Warren Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6221, "name": "Frankston Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6196, "name": "Geelong North Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6202, "name": "Hastings Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6299, "name": "Hawthorn Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6395, "name": "Hoppers Crossing Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6240, "name": "Keysborough Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6431, "name": "Leopold Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6435, "name": "Lilydale Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6224, "name": "Maribyrnong Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6450, "name": "Melton East Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6400, "name": "Mentone Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6422, "name": "Mernda Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6246, "name": "Mill Park Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6363, "name": "Moorabbin Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6180, "name": "Mornington (VIC) Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6359, "name": "Notting Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6140, "name": "Nunawading Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6438, "name": "Oakleigh Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6227, "name": "Pakenham Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6042, "name": "Port Melbourne Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6448, "name": "Preston Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6432, "name": "Ringwood Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6075, "name": "Rosebud Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6011, "name": "Scoresby Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6403, "name": "Springvale Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6411, "name": "Sunbury Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6083, "name": "Sunshine Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6453, "name": "Tarneit Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6194, "name": "Taylors Lakes Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6390, "name": "Thomastown Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6388, "name": "Torquay Warehouse", "models": ["DDL709", "7300-5HB"]}, {"state": "VIC", "store": 6230, "name": "Vermont South Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6449, "name": "Warragul Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6185, "name": "Waurn Ponds Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6415, "name": "Werribee SFS", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6249, "name": "West Footscray Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "VIC", "store": 6451, "name": "Wonthaggi Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5095, "name": "Marion Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5214, "name": "Victor Harbor Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5226, "name": "Adelaide Airport Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5121, "name": "Mile End Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5150, "name": "Reynella Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5211, "name": "Seaford Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5220, "name": "Windsor Gardens Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5083, "name": "Noarlunga Warehouse", "models": ["DDL709", "7300-5HB"]}, {"state": "SA", "store": 5160, "name": "Parafield Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5229, "name": "Murray Bridge Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5068, "name": "Woodville Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5224, "name": "Munno Para West Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5181, "name": "Gawler Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5024, "name": "Kent Town Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5210, "name": "Modbury Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "SA", "store": 5215, "name": "Port Lincoln Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2432, "name": "Armadale WA Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2445, "name": "Bayswater (WA) Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2157, "name": "Melville Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2052, "name": "Belmont WA Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2160, "name": "Cockburn Central Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2440, "name": "Midland Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2130, "name": "Maddington Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2435, "name": "Joondalup Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2404, "name": "Innaloo Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2438, "name": "Cannington Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2443, "name": "Wangara Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2181, "name": "Albany Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2010, "name": "Balcatta Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2170, "name": "Mindarie Warehouse - Lower Keys Drive", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2016, "name": "Harrisdale Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2402, "name": "O'Connor Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2260, "name": "Homebase Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2406, "name": "Malaga Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "WA", "store": 2442, "name": "Baldivis Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8196, "name": "Acacia Ridge Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8158, "name": "Arundel Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8171, "name": "Bethania Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8191, "name": "Brendale Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8066, "name": "Browns Plains Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8181, "name": "Bundamba Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8172, "name": "Burleigh Waters Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8220, "name": "Caboolture Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8026, "name": "Cannon Hill Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8101, "name": "Capalaba Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8018, "name": "Carseldine Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8179, "name": "Dalby Store", "models": ["DDL709", "7300-5HB", "DDL210-1H"]}, {"state": "QLD", "store": 8197, "name": "Indooroopilly Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8203, "name": "Kawana Store", "models": ["DDL709", "7300-5HB", "DDL615"]}, {"state": "QLD", "store": 8057, "name": "Keperra Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8205, "name": "Kingaroy Warehouse", "models": ["DDL709", "7300-5HB"]}, {"state": "QLD", "store": 8212, "name": "Lawnton Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8199, "name": "Logan Road Mt Gravatt Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8201, "name": "Loganholme Store", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8164, "name": "Manly West Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8042, "name": "Morayfield Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8103, "name": "Mt Gravatt Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8140, "name": "Nerang Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8161, "name": "Newstead Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8180, "name": "North Lakes Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8169, "name": "Oxenford Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8109, "name": "Oxley Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8215, "name": "Pimpama Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8211, "name": "Robina Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8035, "name": "Southport Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8182, "name": "Springfield Central Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8056, "name": "Stafford Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8210, "name": "Underwood Compton Road Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8085, "name": "Victoria Point Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8175, "name": "Virginia Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}, {"state": "QLD", "store": 8159, "name": "West Ipswich Warehouse", "models": ["DDL709", "7300-5HB", "DDL210-1H", "DDL615"]}];
-const MODEL_DESC = {"DDL709": ">PHILIPS FACIAL RECOGNITION++TWO-WAY VIDEO INTERCOM DDL709", "7300-5HB": ">DIGITAL DOOR LOCK PHILIPS++EASYKEY 7300-5HB BLACK", "DDL210-1H": ">DIGITAL DOOR LOCK PHILIPS++DDL210-1H-BLACK", "DDL615": ">PHILIPS 4 METHOD UNLOCK HANDL++FINGERPRINT & PIN SHARE DDL615"};
-const SEED_HISTORY = [{"weekStart": "20260706", "label": "Jul 12", "deranged": [{"store": 7361, "state": "NSW", "name": "Katoomba Store", "model": "DDL210-1H", "soh": 2}, {"store": 7161, "state": "NSW", "name": "Valley Heights Store", "model": "DDL210-1H", "soh": null}, {"store": 8212, "state": "QLD", "name": "Lawnton Store", "model": "DDL210-1H", "soh": null}, {"store": 8199, "state": "QLD", "name": "Logan Road Mt Gravatt Store", "model": "DDL210-1H", "soh": null}, {"store": 8199, "state": "QLD", "name": "Logan Road Mt Gravatt Store", "model": "DDL615", "soh": 1}, {"store": 8085, "state": "QLD", "name": "Victoria Point Warehouse", "model": "DDL210-1H", "soh": null}, {"store": 6433, "state": "VIC", "name": "East Pakenham Store", "model": "DDL210-1H", "soh": null}, {"store": 6451, "state": "VIC", "name": "Wonthaggi Warehouse", "model": "DDL615", "soh": 1}, {"store": 2260, "state": "WA", "name": "Homebase Store", "model": "DDL615", "soh": 1}]}, {"weekStart": "20260713", "label": "Jul 19", "deranged": [{"store": 7361, "state": "NSW", "name": "Katoomba Store", "model": "DDL210-1H", "soh": 2}, {"store": 7159, "state": "NSW", "name": "Narrabeen Store", "model": "DDL709", "soh": 4}, {"store": 7159, "state": "NSW", "name": "Narrabeen Store", "model": "7300-5HB", "soh": 3}, {"store": 7152, "state": "NSW", "name": "Thornleigh Warehouse", "model": "DDL615", "soh": 1}, {"store": 7161, "state": "NSW", "name": "Valley Heights Store", "model": "DDL210-1H", "soh": 2}, {"store": 8212, "state": "QLD", "name": "Lawnton Store", "model": "DDL210-1H", "soh": 1}, {"store": 8199, "state": "QLD", "name": "Logan Road Mt Gravatt Store", "model": "DDL615", "soh": 1}, {"store": 8085, "state": "QLD", "name": "Victoria Point Warehouse", "model": "DDL210-1H", "soh": 1}, {"store": 6433, "state": "VIC", "name": "East Pakenham Store", "model": "DDL210-1H", "soh": 3}, {"store": 6451, "state": "VIC", "name": "Wonthaggi Warehouse", "model": "DDL615", "soh": 1}, {"store": 2260, "state": "WA", "name": "Homebase Store", "model": "DDL615", "soh": 1}]}, {"weekStart": "20260720", "label": "Jul 26", "deranged": [{"store": 7159, "state": "NSW", "name": "Narrabeen Store", "model": "DDL709", "soh": 4}, {"store": 7159, "state": "NSW", "name": "Narrabeen Store", "model": "7300-5HB", "soh": 3}, {"store": 7152, "state": "NSW", "name": "Thornleigh Warehouse", "model": "DDL615", "soh": 1}, {"store": 6451, "state": "VIC", "name": "Wonthaggi Warehouse", "model": "DDL615", "soh": 1}, {"store": 2260, "state": "WA", "name": "Homebase Store", "model": "DDL615", "soh": 0}, {"store": 8199, "state": "QLD", "name": "Logan Road Mt Gravatt Store", "model": "DDL615", "soh": 1}]}];
-const EXCLUDED_MODELS = ['DDL210-1H'];
-// Real, shared, persistent storage via Supabase.
-// Publishable key is safe to expose client-side; RLS policies on the
-// table control what it can actually read/write.
-const SUPABASE_URL = 'https://vggbzpvgukprwpopewot.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_hG5I11kQ9k5IBYrHaCTkRg_WrwCXYAG';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const SNAPSHOTS_TABLE = 'philips_deranged_snapshots';
+(function(){
+  var D = {"regionRows":[{"region":"Sydney CBD & Inner","count":14,"pct":11.1},{"region":"North Shore","count":10,"pct":7.9},{"region":"Eastern Suburbs","count":8,"pct":6.3},{"region":"Parramatta & Greater West","count":20,"pct":15.9},{"region":"South West Sydney","count":6,"pct":4.8},{"region":"Macarthur (SW Sydney)","count":6,"pct":4.8},{"region":"Sutherland Shire","count":10,"pct":7.9},{"region":"Penrith & Blue Mountains","count":6,"pct":4.8},{"region":"Central Coast","count":7,"pct":5.6},{"region":"Newcastle & Hunter","count":6,"pct":4.8},{"region":"Illawarra","count":4,"pct":3.2},{"region":"South Coast","count":3,"pct":2.4},{"region":"Central West","count":8,"pct":6.3},{"region":"Riverina & Murray","count":4,"pct":3.2},{"region":"Far West","count":1,"pct":0.8},{"region":"New England & North West","count":4,"pct":3.2},{"region":"Mid North Coast","count":5,"pct":4.0},{"region":"Northern Rivers","count":4,"pct":3.2}],"cities":[{"name":"Eastern Harbour City","centre":"Sydney CBD","tag":"A global city, rich in culture and lifestyle","colour":"#1f6fb2","ls":42,"poly":[[-33.52,151.16],[-33.6,151.34],[-33.86,151.3],[-33.98,151.27],[-34.08,151.2],[-34.12,151.08],[-34.04,151.0],[-33.97,151.04],[-33.9,151.06],[-33.82,151.06],[-33.76,151.08],[-33.7,151.05],[-33.6,151.09],[-33.52,151.16]]},{"name":"Central River City","centre":"Parramatta","tag":"A dynamic river city with global connections","colour":"#d2691e","ls":26,"poly":[[-33.58,150.86],[-33.6,151.02],[-33.7,151.05],[-33.76,151.08],[-33.82,151.06],[-33.9,151.06],[-33.97,151.04],[-34.02,150.99],[-34.0,150.9],[-33.94,150.83],[-33.84,150.79],[-33.72,150.79],[-33.63,150.8],[-33.58,150.86]]},{"name":"Western Parkland City","centre":"Penrith, Liverpool, Campbelltown","tag":"A growing, connected and sustainable west","colour":"#2e7d4f","ls":10,"poly":[[-33.55,150.58],[-33.58,150.86],[-33.63,150.8],[-33.72,150.79],[-33.84,150.79],[-33.94,150.83],[-34.0,150.9],[-34.06,150.9],[-34.14,150.86],[-34.2,150.76],[-34.12,150.66],[-34.0,150.6],[-33.85,150.57],[-33.7,150.55],[-33.55,150.58]]}],"nswPath":"M 271.2875,129.6 L 270.4125,130.225 L 269.75625,130.85 L 268.6625,130.94375 L 267.75625,131.0375 L 267.6625,131.7875 L 267.94375,132.85 L 268.6625,132.7875 L 268.00625,133.56875 L 267.88125,134.13125 L 266.85,134.6 L 266.06875,134.31875 L 265.6625,133.63125 L 265.00625,134.4125 L 264.35,135.225 L 264.0375,135.7875 L 263.35,136.225 L 262.88125,135.1625 L 262.81875,134.44375 L 262.38125,133.75625 L 261.975,133.25625 L 261.31875,132.4125 L 260.19375,132.1625 L 258.56875,132.13125 L 257.975,131.81875 L 257.225,131.5375 L 256.50625,131.6 L 256.2875,131.06875 L 255.38125,131.1625 L 253.94375,131.6625 L 252.6625,131.44375 L 251.35,131.0375 L 250.7875,131.06875 L 250.00625,132.25625 L 248.9125,132.1625 L 248.81875,133.2875 L 248.1,133.35 L 248.1625,133.88125 L 247.2875,134.35 L 194.1625,134.2875 L 194.1625,179.35 L 194.1625,179.38125 L 194.225,179.6 L 195.35,179.4125 L 197.19375,180.2875 L 198.225,179.56875 L 199.975,179.85 L 202.1,180.1 L 203.81875,181.5375 L 204.31875,183.56875 L 205.4125,184.5375 L 205.44375,183.56875 L 206.50625,183.0375 L 207.475,183.25625 L 209.19375,183.38125 L 210.19375,183.7875 L 210.81875,186.5375 L 212.25625,188.6 L 213.38125,188.63125 L 215.00625,189.31875 L 216.975,191.1 L 217.35,192.38125 L 218.63125,193.31875 L 220.25625,194.00625 L 221.56875,193.81875 L 221.31875,192.35 L 221.81875,191.69375 L 222.5375,191.6 L 223.38125,192.0375 L 225.225,191.75625 L 226.6625,192.475 L 227.56875,192.35 L 228.7875,192.9125 L 229.975,193.13125 L 230.63125,192.44375 L 231.50625,192.13125 L 232.56875,192.725 L 234.50625,193.19375 L 235.975,192.7875 L 237.0375,192.44375 L 237.7875,192.31875 L 238.50625,192.0375 L 239.4125,191.69375 L 240.81875,192.44375 L 240.63125,193.6 L 241.19375,194.81875 L 241.9125,195.85 L 242.25625,196.94375 L 242.1,198.2875 L 250.2875,202.35 L 252.00625,202.475 L 252.725,203.13125 L 253.38125,203.13125 L 253.225,203.56875 L 253.35,203.6625 L 254.44375,203.13125 L 254.225,201.4125 L 254.6625,201.19375 L 255.1,201.19375 L 254.6625,200.13125 L 253.81875,199.9125 L 254.225,199.06875 L 253.81875,198.00625 L 254.225,198.225 L 254.6625,196.725 L 255.50625,193.31875 L 255.2875,191.19375 L 255.725,189.9125 L 255.2875,189.9125 L 256.35,189.06875 L 255.725,188.225 L 256.56875,188.4125 L 258.2875,184.38125 L 259.75625,183.94375 L 259.13125,182.6625 L 259.75625,182.475 L 259.75625,183.31875 L 260.19375,183.1 L 259.75625,181.81875 L 259.35,182.0375 L 259.56875,181.6 L 258.69375,181.4125 L 260.19375,180.75625 L 260.63125,179.25625 L 260.19375,178.63125 L 260.85,178.4125 L 260.85,176.9125 L 262.5375,175.225 L 261.9125,175.00625 L 262.975,174.7875 L 261.69375,174.38125 L 263.1625,174.1625 L 263.38125,173.1 L 262.75625,173.50625 L 262.31875,173.1 L 262.975,173.31875 L 262.75625,172.6625 L 263.38125,173.1 L 263.6,171.38125 L 263.6,171.1625 L 263.1625,171.6 L 263.1625,170.975 L 262.975,171.1625 L 262.75625,170.5375 L 263.38125,170.975 L 263.6,169.9125 L 263.6,170.75625 L 264.44375,170.31875 L 264.6625,169.25625 L 264.25625,168.85 L 265.1,168.85 L 265.725,167.13125 L 265.1,167.975 L 264.88125,167.13125 L 265.50625,167.13125 L 265.50625,166.2875 L 265.725,167.13125 L 266.6,165.63125 L 266.38125,165.225 L 266.7875,165.225 L 266.7875,165.85 L 269.35,164.35 L 268.50625,164.1625 L 267.6625,164.7875 L 267.44375,164.56875 L 267.85,164.1625 L 267.6625,163.725 L 268.50625,164.1625 L 269.13125,163.725 L 269.35,164.1625 L 270.19375,162.88125 L 271.69375,162.00625 L 271.9125,160.31875 L 271.25625,160.1 L 271.25625,160.5375 L 270.4125,160.1 L 271.25625,160.1 L 271.475,160.1 L 271.69375,158.6 L 273.19375,157.35 L 275.1,151.1625 L 274.88125,146.9125 L 276.38125,143.06875 L 276.6,142.4125 L 277.225,138.81875 L 276.6,138.38125 L 277.225,138.6 L 277.0375,137.75625 L 278.725,134.5375 L 278.2875,134.5375 L 278.725,134.35 L 278.94375,132.63125 L 278.2875,131.7875 L 278.475,129.88125 L 277.50625,129.9125 L 276.6,129.81875 L 276.06875,130.225 L 275.56875,130.44375 L 275.00625,130.50625 L 274.06875,130.225 L 273.0375,130.69375 L 272.225,129.88125 L 271.2875,129.6 z M 245.94375,185.85 C 246.4011,185.83171 246.88755,185.9021 247.31875,186.1 C 247.68859,186.26974 247.81087,186.51964 247.7875,186.7875 C 247.76413,187.05536 247.56333,187.33774 247.35,187.6625 C 246.92333,188.312 246.34845,189.03293 246.38125,189.6625 C 246.30457,190.00785 245.94393,190.75511 245.44375,190.85 C 245.19366,190.89744 244.89487,190.78185 244.6,190.38125 C 244.30512,189.98065 243.99269,189.29934 243.69375,188.19375 C 243.51125,187.5188 243.72572,186.9458 244.1625,186.5375 C 244.59927,186.1292 245.25772,185.87745 245.94375,185.85 z ","nswRings":[[[-27.7056,152.644],[-27.7861,152.5123],[-27.8669,152.4135],[-27.8776,152.249],[-27.8886,152.1127],[-27.9866,152.0985],[-28.1259,152.1405],[-28.1187,152.2486],[-28.22,152.1498],[-28.2934,152.1309],[-28.3532,151.9757],[-28.3154,151.8583],[-28.2249,151.7974],[-28.3261,151.6985],[-28.4315,151.5997],[-28.5046,151.5526],[-28.5608,151.4491],[-28.4212,151.3789],[-28.3271,151.3696],[-28.2366,151.3039],[-28.1707,151.2429],[-28.0594,151.1444],[-28.0252,150.9753],[-28.0188,150.7309],[-27.9771,150.6417],[-27.9393,150.529],[-27.9464,150.4209],[-27.8767,150.3881],[-27.8877,150.2518],[-27.951,150.0356],[-27.9206,149.8429],[-27.8657,149.6457],[-27.869,149.5611],[-28.0232,149.4434],[-28.0094,149.2789],[-28.1564,149.2646],[-28.1635,149.1565],[-28.2331,149.1658],[-28.2931,149.0342],[-28.2106,141.0457],[-34.1032,141.0372],[-34.1073,141.0372],[-34.136,141.0465],[-34.1131,141.2157],[-34.2301,141.4928],[-34.1375,141.648],[-34.1768,141.9111],[-34.2124,142.2306],[-34.4028,142.4888],[-34.6691,142.5636],[-34.7973,142.7279],[-34.6707,142.7328],[-34.6027,142.8926],[-34.6327,143.0383],[-34.6514,143.2967],[-34.706,143.447],[-35.0664,143.5404],[-35.3382,143.7562],[-35.3438,143.9254],[-35.436,144.1696],[-35.6717,144.4653],[-35.8397,144.5215],[-35.9641,144.7139],[-36.0563,144.9582],[-36.0336,145.1556],[-35.8412,145.1182],[-35.7561,145.1936],[-35.7448,145.3017],[-35.8032,145.4284],[-35.769,145.7057],[-35.865,145.9218],[-35.85,146.0581],[-35.9252,146.2412],[-35.9555,146.4198],[-35.8665,146.5186],[-35.8269,146.6502],[-35.906,146.8099],[-35.97,147.1011],[-35.9189,147.322],[-35.8755,147.4819],[-35.8602,147.5947],[-35.8244,147.7028],[-35.7807,147.8392],[-35.8808,148.0505],[-36.0317,148.0221],[-36.1919,148.1064],[-36.3277,148.2143],[-36.4712,148.2658],[-36.6467,148.242],[-37.1894,149.4724],[-37.2082,149.7309],[-37.295,149.8388],[-37.2959,149.9375],[-37.3529,149.9139],[-37.3653,149.9327],[-37.2974,150.0973],[-37.0723,150.0647],[-37.0443,150.1305],[-37.045,150.1963],[-36.9054,150.1307],[-36.8756,150.0039],[-36.7659,150.0651],[-36.6264,150.0043],[-36.6555,150.0653],[-36.46,150.1314],[-36.0157,150.2589],[-35.7376,150.2264],[-35.5706,150.2924],[-35.57,150.2266],[-35.4612,150.3866],[-35.35,150.2927],[-35.3757,150.4196],[-34.8509,150.6788],[-34.7958,150.8997],[-34.6273,150.806],[-34.6037,150.9],[-34.714,150.8999],[-34.686,150.9657],[-34.5179,150.9001],[-34.5459,150.839],[-34.489,150.872],[-34.4633,150.7404],[-34.3796,150.9661],[-34.184,151.0322],[-34.1017,150.9665],[-34.074,151.0653],[-33.8779,151.0655],[-33.6595,151.3196],[-33.6301,151.2257],[-33.6029,151.3855],[-33.548,151.1929],[-33.5215,151.4138],[-33.3829,151.4469],[-33.4351,151.3528],[-33.3814,151.2871],[-33.4109,151.3858],[-33.3248,151.353],[-33.3829,151.4469],[-33.1584,151.4801],[-33.1298,151.4801],[-33.1864,151.4143],[-33.1047,151.4144],[-33.1289,151.3862],[-33.0469,151.3534],[-33.105,151.4473],[-32.9663,151.4804],[-33.0767,151.4802],[-33.0206,151.6072],[-32.882,151.6403],[-32.8283,151.5793],[-32.8295,151.7061],[-32.6056,151.8004],[-32.7151,151.7063],[-32.6044,151.6736],[-32.6053,151.7676],[-32.495,151.7677],[-32.6056,151.8004],[-32.4107,151.9323],[-32.3573,151.8995],[-32.3578,151.9606],[-32.4396,151.9605],[-32.247,152.3461],[-32.2213,152.2192],[-32.3019,152.0922],[-32.2729,152.0594],[-32.2204,152.1205],[-32.1629,152.0924],[-32.2213,152.2192],[-32.165,152.3133],[-32.2225,152.3461],[-32.0561,152.4732],[-31.9438,152.6989],[-31.7234,152.7322],[-31.6939,152.6335],[-31.7511,152.6334],[-31.6927,152.5066],[-31.6939,152.6335],[-31.6942,152.6664],[-31.4984,152.6996],[-31.337,152.9254],[-30.5306,153.2132],[-29.9745,153.1811],[-29.474,153.4074],[-29.3885,153.4404],[-28.9194,153.5351],[-28.8613,153.4412],[-28.8908,153.5351],[-28.7802,153.5071],[-28.3617,153.7614],[-28.3611,153.6956],[-28.3372,153.7615],[-28.1127,153.7947],[-28.0015,153.6962],[-27.7524,153.7247],[-27.7552,153.579],[-27.7416,153.4428],[-27.794,153.3628],[-27.8219,153.2876],[-27.8293,153.203],[-27.7912,153.0621],[-27.8511,152.9069],[-27.7437,152.7849],[-27.7056,152.644]],[[-35.0257,148.8224],[-35.024,148.8911],[-35.0338,148.9643],[-35.0603,149.0291],[-35.083,149.0847],[-35.1159,149.103],[-35.1509,149.0994],[-35.1859,149.0959],[-35.2225,149.0656],[-35.2647,149.0335],[-35.349,148.9692],[-35.4425,148.8826],[-35.5249,148.8874],[-35.5699,148.8758],[-35.6671,148.8215],[-35.6788,148.7462],[-35.6847,148.7086],[-35.6692,148.6637],[-35.6164,148.6195],[-35.5636,148.5752],[-35.474,148.5283],[-35.329,148.4836],[-35.2405,148.4563],[-35.1659,148.4886],[-35.1131,148.5544],[-35.0603,148.6201],[-35.0283,148.7192],[-35.0257,148.8224]]],"places":{"syd":[[-33.872,150.8853,"Abbotsbury"],[-33.866,151.1339,"Abbotsford"],[-33.7256,150.8955,"Acacia Gardens"],[-33.604,150.6461,"Agnes Banks"],[-34.1942,150.7684,"Airds"],[-33.651,151.2169,"Akuna Bay"],[-33.7118,151.1082,"Alexandria"],[-33.908,151.19,"Alexandria Mc"],[-34.0219,151.0044,"Alfords Point"],[-33.7664,151.2578,"Allambie"],[-33.7664,151.2578,"Allambie Heights"],[-33.9732,151.1175,"Allawah"],[-34.1942,150.7684,"Ambarvale"],[-33.6722,150.7958,"Angus"],[-33.8816,151.1702,"Annandale"],[-33.657,150.9745,"Annangrove"],[-34.1942,150.7684,"Appin"],[-33.5391,151.0841,"Arcadia"],[-33.9376,151.148,"Arncliffe"],[-33.7838,150.9005,"Arndell Park"],[-33.8081,151.1927,"Artarmon"],[-33.9103,151.1209,"Ashbury"],[-33.9159,150.8753,"Ashcroft"],[-33.8876,151.124,"Ashfield"],[-33.6919,151.0975,"Asquith"],[-33.8839,151.0238,"Auburn"],[-33.8519,151.0268,"Auburn South"],[-34.0618,151.0643,"Audley"],[-33.9331,150.812,"Austral"],[-33.8918,151.1763,"Australia Square"],[-33.6348,151.3233,"Avalon"],[-33.6348,151.3233,"Avalon Beach"],[-33.4822,151.402,"Avoca Beach"],[-33.8834,150.7414,"Badgerys Creek"],[-33.7931,151.2581,"Balgowlah"],[-33.7931,151.2581,"Balgowlah Heights"],[-33.8586,151.1801,"Balmain"],[-33.8586,151.1801,"Balmain East"],[-34.1671,150.6225,"Balmoral Village"],[-34.0219,151.0044,"Bangor"],[-33.9554,151.1482,"Banksia"],[-33.9469,151.2073,"Banksmeadow"],[-33.9074,151.0246,"Bankstown"],[-33.9226,150.9887,"Bankstown Aerodrome"],[-33.9266,151.0149,"Bankstown Airport"],[-33.9266,151.0149,"Bankstown North"],[-33.9266,151.0149,"Bankstown Square"],[-33.5253,151.1945,"Bar Point"],[-33.8605,151.2016,"Barangaroo"],[-34.0219,151.0044,"Barden Ridge"],[-33.9772,150.8619,"Bardia"],[-33.9487,151.1195,"Bardwell Park"],[-33.9487,151.1195,"Bardwell Valley"],[-34.2956,150.5752,"Bargo"],[-33.9012,150.9982,"Bass Hill"],[-33.7672,150.9682,"Baulkham Hills"],[-33.6649,151.2909,"Bayview"],[-33.7664,151.2578,"Beacon Hill"],[-33.9101,151.1948,"Beaconsfield"],[-33.7315,150.9311,"Beaumont Hills"],[-33.7555,151.0642,"Beecroft"],[-33.9068,151.0855,"Belfield"],[-34.0429,150.5253,"Belimbla Park"],[-33.7317,150.9559,"Bella Vista"],[-33.8847,151.2559,"Bellevue Hill"],[-33.921,151.0897,"Belmore"],[-33.7288,151.2117,"Belrose"],[-33.7288,151.2117,"Belrose West"],[-33.891,151.269,"Ben Buckler"],[-33.4822,151.402,"Bensville"],[-33.8725,151.0448,"Berala"],[-33.4836,150.6018,"Berambing"],[-33.663,150.8603,"Berkshire Park"],[-33.6198,151.1505,"Berowra"],[-33.5462,151.1387,"Berowra Creek"],[-33.5619,151.169,"Berowra Heights"],[-33.5619,151.169,"Berowra Waters"],[-33.5391,151.0841,"Berrilee"],[-33.9744,151.1403,"Beverley Park"],[-33.9491,151.0753,"Beverly Hills"],[-33.9487,151.1195,"Bexley"],[-33.9487,151.1195,"Bexley North"],[-33.9487,151.1195,"Bexley South"],[-34.0429,150.5253,"Bickley Vale"],[-33.7564,150.8102,"Bidwill"],[-33.6348,151.3233,"Bilgola"],[-33.6348,151.3233,"Bilgola Beach"],[-33.6348,151.3233,"Bilgola Plateau"],[-33.4836,150.6018,"Bilpin"],[-33.8586,151.1801,"Birchgrove"],[-33.8854,151.0219,"Birrong"],[-33.7564,150.8102,"Blackett"],[-33.7838,150.9005,"Blacktown"],[-33.7838,150.9005,"Blacktown Westpoint"],[-33.4821,151.3312,"Blackwall"],[-34.1942,150.7684,"Blair Athol"],[-34.0513,150.7936,"Blairmount"],[-33.9922,151.106,"Blakehurst"],[-33.8327,151.0152,"Blaxcell"],[-33.7327,150.629,"Blaxland"],[-33.7327,150.629,"Blaxland East"],[-33.4836,150.6018,"Blaxlands Ridge"],[-33.7942,151.1302,"Blenheim Road"],[-33.4663,150.8874,"Bligh Park"],[-33.7352,151.1237,"Bobbin Head"],[-33.891,151.269,"Bondi"],[-33.891,151.269,"Bondi Beach"],[-33.8937,151.2625,"Bondi Junction"],[-33.8964,151.245,"Bondi Junction Plaza"],[-34.0093,151.0638,"Bonnet Bay"],[-34.0882,151.124,"Bonnie Vale"],[-33.8951,150.8794,"Bonnyrigg"],[-33.8951,150.8794,"Bonnyrigg Heights"],[-33.5204,151.3744,"Booker Bay"],[-33.83,151.1245,"Boronia Park"],[-33.872,150.8853,"Bossley Park"],[-33.9471,151.1976,"Botany"],[-33.4822,151.402,"Bouddi"],[-34.0273,150.8423,"Bow Bowing"],[-33.604,150.6461,"Bowen Mountain"],[-33.5204,151.3744,"Box Head"],[-33.663,150.8603,"Box Hill"],[-34.1942,150.7684,"Bradbury"],[-33.9163,150.734,"Bradfield"],[-33.8575,151.1038,"Breakfast Point"],[-33.9141,150.5067,"Brereton"],[-33.9591,151.152,"Brighton Le Sands"],[-33.9554,151.1482,"Brighton-Le-Sands"],[-33.9457,150.7252,"Bringelly"],[-33.8842,151.1998,"Broadway"],[-33.9044,151.2594,"Bronte"],[-33.5253,151.1945,"Brooklyn"],[-33.7664,151.2578,"Brookvale"],[-34.0429,150.5253,"Brownlow Hill"],[-33.7299,150.407,"Bullaburra"],[-34.0932,151.1366,"Bundeena"],[-33.7797,150.8652,"Bungarribee"],[-34.0932,151.1366,"Burraneer"],[-33.8916,151.1008,"Burwood"],[-33.8929,151.0877,"Burwood Heights"],[-33.88,151.1018,"Burwood North"],[-33.9159,150.8753,"Busby"],[-34.1671,150.6225,"Buxton"],[-33.8575,151.1038,"Cabarita"],[-33.8927,150.9294,"Cabramatta"],[-33.8927,150.9294,"Cabramatta West"],[-33.7741,150.7377,"Caddens"],[-33.7223,150.7394,"Cambridge Gardens"],[-33.7223,150.7394,"Cambridge Park"],[-34.0429,150.5253,"Camden"],[-34.0429,150.5253,"Camden Park"],[-34.0429,150.5253,"Camden South"],[-33.8327,151.0152,"Camellia"],[-33.8228,151.2125,"Cammeray"],[-34.1942,150.7684,"Campbelltown"],[-34.1942,150.7684,"Campbelltown North"],[-33.9176,151.1018,"Campsie"],[-33.866,151.1339,"Canada Bay"],[-33.8927,150.9294,"Canley Heights"],[-33.8927,150.9294,"Canley Vale"],[-33.6022,150.9911,"Canoelands"],[-33.9103,151.1209,"Canterbury"],[-33.9974,151.0879,"Caravan Head"],[-33.6348,151.3233,"Careel Bay"],[-34.0469,151.1239,"Caringbah"],[-34.0551,151.1197,"Caringbah South"],[-33.7756,151.0435,"Carlingford"],[-33.7756,151.0435,"Carlingford Court"],[-33.7756,151.0435,"Carlingford North"],[-33.9732,151.1175,"Carlton"],[-33.9377,150.8487,"Carnes Hill"],[-33.8872,150.9795,"Carramar"],[-33.9922,151.106,"Carss Park"],[-33.9159,150.8753,"Cartwright"],[-33.7802,151.1954,"Castle Cove"],[-33.7359,151.0305,"Castle Hill"],[-33.8009,151.2027,"Castlecrag"],[-33.7022,150.6868,"Castlereagh"],[-33.9284,150.9214,"Casula"],[-33.9284,150.9214,"Casula Mall"],[-34.2938,150.8248,"Cataract"],[-33.9935,150.7749,"Catherine Field"],[-33.4663,150.8874,"Cattai"],[-34.0429,150.5253,"Cawdor"],[-33.9596,150.9709,"Cecil Hills"],[-33.8748,150.8382,"Cecil Park"],[-33.8957,151.2272,"Centennial Park"],[-33.4663,150.8874,"Central Colo"],[-33.9044,151.2594,"Charing Cross"],[-33.792,151.1899,"Chatswood"],[-33.7984,151.1771,"Chatswood West"],[-33.5105,151.192,"Cheero Point"],[-33.7555,151.0642,"Cheltenham"],[-33.7249,151.0439,"Cherrybrook"],[-33.8835,151.0041,"Chester Hill"],[-33.9696,151.2378,"Chifley"],[-33.8911,151.1939,"Chippendale"],[-33.9284,150.9214,"Chipping Norton"],[-33.866,151.1339,"Chiswick"],[-33.8919,151.0477,"Chullora"],[-33.6422,151.2783,"Church Point"],[-33.7223,150.7394,"Claremont Meadows"],[-33.4663,150.8874,"Clarendon"],[-33.6348,151.3233,"Clareville"],[-34.0513,150.7936,"Claymore"],[-33.9261,151.1229,"Clemton Park"],[-33.7931,151.2581,"Clontarf"],[-33.9148,151.2392,"Clovelly"],[-33.9148,151.2392,"Clovelly West"],[-33.8331,151.0221,"Clyde"],[-34.2309,150.9697,"Coalcliff"],[-33.6038,151.3228,"Coasters Retreat"],[-34.0429,150.5253,"Cobbitty"],[-33.5253,151.1945,"Cogra Bay"],[-33.742,150.8475,"Colebee"],[-33.7396,151.2979,"Collaroy"],[-33.7396,151.2979,"Collaroy Beach"],[-33.7303,151.2907,"Collaroy Plateau"],[-33.7396,151.2979,"Collaroy Plateau West"],[-33.4663,150.8874,"Colo"],[-33.4663,150.8874,"Colo Heights"],[-33.764,150.7801,"Colyton"],[-34.0093,151.0638,"Como"],[-33.8575,151.1038,"Concord"],[-33.836,151.0952,"Concord Repatriation Hospital"],[-33.8461,151.086,"Concord West"],[-33.8397,151.088,"Concord West Dc"],[-33.9266,151.0149,"Condell Park"],[-33.9922,151.106,"Connells Point"],[-33.7938,150.9752,"Constitution Hill"],[-33.9291,151.2522,"Coogee"],[-33.4822,151.402,"Copacabana"],[-33.4663,150.8874,"Cornwallis"],[-33.651,151.2169,"Cottage Point"],[-34.1671,150.6225,"Couridjah"],[-33.6198,151.1505,"Cowan"],[-33.7022,150.6868,"Cranebrook"],[-33.8289,151.2231,"Cremorne"],[-33.8289,151.2231,"Cremorne Junction"],[-33.8289,151.2231,"Cremorne Point"],[-33.7317,150.9559,"Crestwood"],[-33.7489,151.28,"Cromer"],[-33.7489,151.28,"Cromer Heights"],[-34.0932,151.1366,"Cronulla"],[-33.8346,151.2009,"Crows Nest"],[-33.8261,151.205,"Crows Nest Dc"],[-33.8824,151.1134,"Croydon"],[-33.8988,151.1021,"Croydon Park"],[-33.4647,150.895,"Cumberland Reach"],[-33.7768,151.2849,"Curl Curl"],[-34.0552,150.7565,"Currans Hill"],[-33.6038,151.3228,"Currawong Beach"],[-33.9303,151.2239,"Daceyville"],[-33.5204,151.3744,"Daleys Point"],[-33.5253,151.1945,"Dangar Island"],[-34.2309,150.9697,"Darkes Forest"],[-33.86,151.2566,"Darling Harbour"],[-33.8712,151.1931,"Darling Island"],[-33.869,151.2505,"Darling Point"],[-33.8773,151.2209,"Darlinghurst"],[-33.8911,151.1939,"Darlington"],[-33.7288,151.2117,"Davidson"],[-33.4822,151.402,"Davistown"],[-33.86,151.2566,"Dawes Point"],[-33.742,150.8475,"Dean Park"],[-33.7489,151.28,"Dee Why"],[-33.7489,151.28,"Dee Why Beach"],[-33.9961,150.8438,"Denham Court"],[-33.811,151.0842,"Denistone"],[-33.8166,151.1084,"Denistone East"],[-33.811,151.0842,"Denistone West"],[-33.7564,150.8102,"Dharruk"],[-33.8584,151.276,"Diamond Bay"],[-34.0549,151.1201,"Dolans Bay"],[-33.9966,151.1325,"Dolls Point"],[-33.7638,150.8711,"Doonside"],[-33.8758,151.2419,"Double Bay"],[-34.196,150.7089,"Douglas Park"],[-33.8584,151.276,"Dover Heights"],[-33.843,151.152,"Drummoyne"],[-33.651,151.2169,"Duffys Forest"],[-33.9044,151.139,"Dulwich Hill"],[-33.7971,151.0422,"Dundas"],[-33.7971,151.0422,"Dundas Valley"],[-33.6903,151.0404,"Dural"],[-33.6822,151.028,"Dural Dc"],[-34.0316,150.7995,"Eagle Vale"],[-33.9261,151.1229,"Earlwood"],[-33.9641,150.9978,"East Hills"],[-33.7554,151.1815,"East Killara"],[-33.4836,150.6018,"East Kurrajong"],[-33.7804,151.162,"East Lindfield"],[-33.7942,151.1302,"East Ryde"],[-33.8104,150.8508,"Eastern Creek"],[-33.9508,151.21,"Eastern Suburbs Mc"],[-33.9696,151.2378,"Eastgardens"],[-33.9233,151.2027,"Eastlakes"],[-33.7914,151.0921,"Eastwood"],[-33.4663,150.8874,"Ebenezer"],[-33.872,150.8853,"Edensor Park"],[-33.869,151.2505,"Edgecliff"],[-33.9775,150.8567,"Edmondson Park"],[-33.7071,151.2711,"Elanora Heights"],[-33.8736,151.2216,"Elizabeth Bay"],[-33.9005,150.8483,"Elizabeth Hills"],[-34.0429,150.5253,"Ellis Lane"],[-33.6422,151.2783,"Elvina Bay"],[-33.7564,150.8102,"Emerton"],[-33.5204,151.3744,"Empire Bay"],[-33.7555,150.6786,"Emu Heights"],[-33.7555,150.6786,"Emu Plains"],[-33.8929,151.0877,"Enfield"],[-33.8988,151.1021,"Enfield South"],[-34.1146,151.0279,"Engadine"],[-34.1942,150.7684,"Englorie Park"],[-33.9006,151.1754,"Enmore"],[-33.7842,151.1167,"Epping"],[-33.4254,151.4369,"Erina Heights"],[-33.9503,151.207,"Ermington"],[-33.8225,150.7818,"Erskine Park"],[-33.9035,151.1847,"Erskineville"],[-34.0316,150.7995,"Eschol Park"],[-33.5204,151.3744,"Ettalong Beach"],[-33.8902,151.1995,"Eveleigh"],[-33.8505,150.9611,"Fairfield"],[-33.8724,150.9475,"Fairfield East"],[-33.8724,150.9475,"Fairfield Heights"],[-33.8724,150.9475,"Fairfield West"],[-33.7952,151.2732,"Fairlight"],[-33.6669,150.5531,"Faulconbridge"],[-33.5391,151.0841,"Fiddletown"],[-33.866,151.1339,"Five Dock"],[-33.6022,150.9911,"Forest Glen"],[-33.8802,151.1845,"Forest Lodge"],[-33.7661,151.2105,"Forestville"],[-33.4254,151.4369,"Forresters Beach"],[-33.4663,150.8874,"Freemans Reach"],[-33.7931,151.2468,"Frenchs Forest"],[-33.7518,151.2292,"Frenchs Forest East"],[-33.7751,151.2849,"Freshwater"],[-33.6722,150.7958,"Gables"],[-33.5391,151.0841,"Galston"],[-34.0618,151.0643,"Garie"],[-33.9088,150.9863,"Georges Hall"],[-34.1942,150.7684,"Gilead"],[-33.8131,150.9574,"Girraween"],[-33.833,151.1397,"Gladesville"],[-33.8802,151.1845,"Glebe"],[-34.0121,150.7811,"Gledswood Hills"],[-34.1942,150.7684,"Glen Alpine"],[-33.7688,150.6268,"Glenbrook"],[-33.742,150.8475,"Glendenning"],[-33.742,150.8475,"Glendenning Dc"],[-33.9722,150.8904,"Glenfield"],[-33.657,150.9745,"Glenhaven"],[-34.0429,150.5253,"Glenmore"],[-33.8713,150.6715,"Glenmore Park"],[-33.6022,150.9911,"Glenorie"],[-33.9984,150.8949,"Glenquarie"],[-33.7379,150.9227,"Glenwood"],[-33.4663,150.8874,"Glossodia"],[-34.079,151.0285,"Goarra"],[-33.8911,151.1939,"Golden Grove"],[-33.7546,151.1532,"Gordon"],[-33.8284,151.1922,"Gore Hill"],[-33.6722,150.7958,"Grantham Farm"],[-33.8593,150.9486,"Granville"],[-34.0429,150.5253,"Grasmere"],[-34.0618,151.0643,"Grays Point"],[-33.6038,151.3228,"Great Mackerel Beach"],[-33.4822,151.402,"Green Point"],[-33.9159,150.8753,"Green Valley"],[-33.9019,151.0539,"Greenacre"],[-33.872,150.8853,"Greenfield Park"],[-34.036,151.1636,"Greenhills Beach"],[-33.8284,151.1922,"Greenwich"],[-33.9935,150.7749,"Gregory Hills"],[-33.8131,150.9574,"Greystanes"],[-33.604,150.6461,"Grose Vale"],[-33.604,150.6461,"Grose Wold"],[-33.7413,151.034,"Grosvenor Place"],[-33.8583,150.9837,"Guildford"],[-33.8583,150.9837,"Guildford West"],[-34.0498,151.085,"Gymea"],[-34.0498,151.085,"Gymea Bay"],[-33.8793,151.1387,"Haberfield"],[-33.9284,150.9214,"Hammondville"],[-33.7768,151.2849,"Harbord"],[-33.5204,151.3744,"Hardys Bay"],[-34.0552,150.7565,"Harrington Park"],[-33.8145,151.0065,"Harris Park"],[-33.742,150.8475,"Hassall Grove"],[-33.6925,150.588,"Hawkesbury Heights"],[-33.7237,150.4593,"Hazelbrook"],[-34.1146,151.0279,"Heathcote"],[-33.7564,150.8102,"Hebersham"],[-33.9159,150.8753,"Heckenberg"],[-34.2309,150.9697,"Helensburgh"],[-33.83,151.1245,"Henley"],[-33.9696,151.2378,"Hillsdale"],[-33.6022,150.9911,"Hillside"],[-33.9159,150.8753,"Hinchinbrook"],[-33.8736,151.2216,"Hmas Kuttabul"],[-33.8279,151.261,"Hmas Penguin"],[-33.8399,151.2046,"Hmas Platypus"],[-33.869,151.2505,"Hmas Rushcutters"],[-33.8399,151.2046,"Hmas Waterhen"],[-33.8584,151.276,"Hmas Watson"],[-33.604,150.6461,"Hobartville"],[-33.8327,151.0152,"Holroyd"],[-34.0742,150.9196,"Holsworthy"],[-33.835,151.0709,"Homebush"],[-33.8528,151.0762,"Homebush Bay"],[-33.835,151.0709,"Homebush South"],[-33.835,151.0709,"Homebush West"],[-33.9596,150.9709,"Horningsea Park"],[-33.7077,151.0998,"Hornsby"],[-33.6919,151.0975,"Hornsby Heights"],[-33.7046,151.101,"Hornsby Westfield"],[-33.4821,151.3312,"Horsfield Bay"],[-33.845,150.8482,"Horsley Park"],[-33.9596,150.9709,"Hoxton Park"],[-33.8361,151.1491,"Hunters Hill"],[-33.8361,151.1491,"Hunters Hill West"],[-33.7838,150.9005,"Huntingwood"],[-33.83,151.1245,"Huntleys Cove"],[-33.83,151.1245,"Huntleys Point"],[-33.9103,151.1209,"Hurlstone Park"],[-33.9759,151.0889,"Hurstville"],[-33.9646,151.101,"Hurstville Bc"],[-33.9667,151.1018,"Hurstville Grove"],[-33.9667,151.1018,"Hurstville Westfield"],[-34.0219,151.0044,"Illawong"],[-33.96,150.8021,"Ingleburn"],[-33.9775,150.8567,"Ingleburn Milpo"],[-33.7071,151.2711,"Ingleside"],[-33.8688,151.209,"International Mc"],[-33.7555,150.6786,"Jamisontown"],[-34.0093,151.0638,"Jannali"],[-34.0932,151.1444,"Jibbon"],[-33.7219,150.7274,"Jordan Springs"],[-34.0136,151.1019,"Kangaroo Point"],[-34.0618,151.0643,"Kareela"],[-33.8329,150.4356,"Katoomba"],[-33.8329,150.4356,"Katoomba Dc"],[-34.0316,150.7995,"Kearns"],[-33.865,150.4029,"Kedumba"],[-33.7315,150.9311,"Kellyville"],[-33.7315,150.9311,"Kellyville Ridge"],[-33.8748,150.8382,"Kemps Creek"],[-33.8885,151.1407,"Kensington"],[-33.657,150.9745,"Kenthurst"],[-34.1942,150.7684,"Kentlyn"],[-33.7618,151.1717,"Killara"],[-33.7661,151.2105,"Killarney Heights"],[-33.5204,151.3744,"Killcare"],[-33.5204,151.3744,"Killcare Heights"],[-33.4822,151.402,"Kincumber"],[-33.4822,151.402,"Kincumber South"],[-33.7661,150.9358,"Kings Langley"],[-33.7838,150.9005,"Kings Park"],[-33.7756,151.0435,"Kingsdene"],[-33.9303,151.2239,"Kingsford"],[-33.9359,151.1,"Kingsgrove"],[-33.9386,151.101,"Kingsgrove Dc"],[-33.9426,151.098,"Kingsway West"],[-34.0429,150.5253,"Kirkham"],[-34.0618,151.0643,"Kirrawee"],[-34.034,151.071,"Kirrawee Dc"],[-33.8488,151.2124,"Kirribilli"],[-33.9744,151.1403,"Kogarah"],[-33.9744,151.1403,"Kogarah Bay"],[-33.4821,151.3312,"Koolewong"],[-33.5548,150.6921,"Kurmond"],[-34.0299,151.1935,"Kurnell"],[-33.8415,151.2228,"Kurraba Point"],[-33.4836,150.6018,"Kurrajong"],[-33.4836,150.6018,"Kurrajong Heights"],[-33.4836,150.6018,"Kurrajong Hills"],[-33.9554,151.1482,"Kyeemagh"],[-33.9922,151.106,"Kyle Bay"],[-33.9696,151.2378,"La Perouse"],[-33.9245,151.0769,"Lakemba"],[-33.92,151.077,"Lakemba Dc"],[-34.1931,150.5592,"Lakesland"],[-33.7661,150.9358,"Lalor Park"],[-33.7919,151.188,"Lane Cove"],[-33.8148,151.166,"Lane Cove Dc"],[-33.8186,151.1609,"Lane Cove North"],[-33.8186,151.1609,"Lane Cove West"],[-33.8872,150.9795,"Lansdowne"],[-33.8927,150.9294,"Lansvale"],[-33.7688,150.6268,"Lapstone"],[-33.8399,151.2046,"Lavender Bay"],[-33.7256,150.4318,"Lawson"],[-33.4663,150.8874,"Leets Vale"],[-34.0429,150.5253,"Lefevres Corner"],[-33.8788,151.1568,"Leichhardt"],[-33.9132,150.8529,"Len Waters Estate"],[-33.7555,150.6786,"Leonay"],[-33.9331,150.812,"Leppington"],[-33.7564,150.8102,"Lethbridge Park"],[-34.1942,150.7684,"Leumeah"],[-33.8329,150.4356,"Leura"],[-33.8972,151.1508,"Lewisham"],[-33.8461,151.086,"Liberty Grove"],[-33.8725,151.0448,"Lidcombe"],[-33.8725,151.0448,"Lidcombe North"],[-34.0549,151.1201,"Lilli Pilli"],[-33.8788,151.1568,"Lilyfield"],[-34.2309,150.9697,"Lilyvale"],[-33.7285,150.4845,"Linden"],[-33.7804,151.162,"Lindfield"],[-33.7804,151.162,"Lindfield West"],[-33.8186,151.1609,"Linley Point"],[-33.9696,151.2378,"Little Bay"],[-33.4821,151.3312,"Little Wobby"],[-33.8883,151.1036,"Liverpool"],[-33.9284,150.9214,"Liverpool South"],[-33.9284,150.9214,"Liverpool Westfield"],[-33.7223,150.7394,"Llandilo"],[-34.0618,151.0643,"Loftus"],[-33.604,150.6461,"Londonderry"],[-33.7396,151.2979,"Long Reef"],[-33.8186,151.1609,"Longueville"],[-33.6422,151.2783,"Lovett Bay"],[-33.4663,150.8874,"Lower Portland"],[-34.0219,151.0044,"Lucas Heights"],[-33.8713,150.6715,"Luddenham"],[-33.9577,151.0523,"Lugarno"],[-33.9284,150.9214,"Lurnea"],[-34.1942,150.7684,"Macarthur Square"],[-33.4822,151.402,"Macmasters Beach"],[-33.7942,151.1302,"Macquarie Centre"],[-33.9984,150.8949,"Macquarie Fields"],[-33.9961,150.8438,"Macquarie Links"],[-33.7942,151.1302,"Macquarie Park"],[-33.7716,151.1135,"Macquarie University"],[-34.2309,150.9697,"Maddens Plains"],[-34.0932,151.1366,"Maianbar"],[-33.9696,151.2378,"Malabar"],[-34.1671,150.6225,"Maldon"],[-33.9266,151.0149,"Manahan"],[-33.8155,151.2947,"Manly East"],[-33.7931,151.2581,"Manly Vale"],[-33.663,150.8603,"Maraylya"],[-33.7838,150.9005,"Marayong"],[-34.1116,151.1176,"Marley"],[-33.4663,150.8874,"Maroota"],[-33.9456,151.2413,"Maroubra"],[-33.9456,151.2413,"Maroubra South"],[-33.9091,151.1533,"Marrickville"],[-33.9123,151.1555,"Marrickville Metro"],[-33.9123,151.1555,"Marrickville South"],[-33.663,150.8603,"Marsden Park"],[-33.7914,151.0921,"Marsfield"],[-33.9267,151.2108,"Mascot"],[-33.9696,151.2378,"Matraville"],[-33.8131,150.9574,"Mays Hill"],[-33.6434,151.2761,"Mccarrs Creek"],[-33.4663,150.8874,"Mcgraths Hill"],[-33.8399,151.2046,"Mcmahons Point"],[-33.811,151.0842,"Meadowbank"],[-33.8329,150.4356,"Medlow Bath"],[-33.4663,150.8874,"Mellong"],[-33.6722,150.7958,"Melonba"],[-33.811,151.0842,"Melrose Park"],[-34.0219,151.0044,"Menai"],[-34.0219,151.0044,"Menai Central"],[-34.1474,150.718,"Menangle"],[-34.1027,150.7498,"Menangle Park"],[-33.8359,150.9766,"Merrylands"],[-33.8359,150.9766,"Merrylands West"],[-33.8009,151.2027,"Middle Cove"],[-33.6903,151.0404,"Middle Dural"],[-33.9147,150.8428,"Middleton Grange"],[-33.9159,150.8753,"Miller"],[-33.86,151.2566,"Millers Point"],[-33.9322,151.0002,"Milperra"],[-33.5253,151.1945,"Milsons Passage"],[-33.8654,151.1931,"Milsons Point"],[-33.7564,150.8102,"Minchinbury"],[-34.0273,150.8423,"Minto"],[-34.0273,150.8423,"Minto Dc"],[-34.0273,150.8423,"Minto Heights"],[-34.0359,151.1072,"Miranda"],[-33.8904,151.176,"Missenden Road"],[-33.6988,151.2168,"Mona Vale"],[-33.83,151.1245,"Monash Park"],[-33.9744,151.1403,"Monterey"],[-33.5253,151.1945,"Mooney Mooney"],[-33.8957,151.2272,"Moore Park"],[-33.9357,150.9413,"Moorebank"],[-33.6243,151.2815,"Morning Bay"],[-33.9803,151.0718,"Mortdale"],[-33.8575,151.1038,"Mortlake"],[-33.8307,151.2434,"Mosman"],[-34.0552,150.7565,"Mount Annan"],[-33.6666,151.1127,"Mount Colah"],[-33.7564,150.8102,"Mount Druitt"],[-33.7564,150.8102,"Mount Druitt Village"],[-34.0429,150.5253,"Mount Hunter"],[-33.6582,151.1436,"Mount Kuring-Gai"],[-33.9019,151.0539,"Mount Lewis"],[-33.9284,150.9214,"Mount Pritchard"],[-33.7327,150.629,"Mount Riverview"],[-33.4836,150.6018,"Mount Tomah"],[-33.8748,150.8382,"Mount Vernon"],[-33.4376,150.6263,"Mountain Lagoon"],[-34.1671,150.6225,"Mowbray Park"],[-33.8713,150.6715,"Mulgoa"],[-33.4663,150.8874,"Mulgrave"],[-34.0552,150.7565,"Narellan"],[-34.0552,150.7565,"Narellan Dc"],[-34.0552,150.7565,"Narellan Vale"],[-33.8284,151.1922,"Naremburn"],[-33.7071,151.2711,"Narrabeen"],[-33.7071,151.2711,"Narrabeen Peninsula"],[-33.7489,151.28,"Narraweena"],[-33.9491,151.0753,"Narwee"],[-34.0429,150.5253,"Nattai"],[-33.838,151.2169,"Neutral Bay"],[-33.838,151.2169,"Neutral Bay Junction"],[-33.8528,151.0762,"Newington"],[-33.6607,151.3146,"Newport"],[-33.6607,151.3146,"Newport Beach"],[-33.9006,151.1754,"Newtown"],[-33.7301,150.9065,"Nirimba Fields"],[-33.7233,151.1082,"Normanhurst"],[-33.4254,151.4369,"North Avoca"],[-33.7931,151.2581,"North Balgowlah"],[-33.891,151.269,"North Bondi"],[-33.7489,151.28,"North Curl Curl"],[-33.7741,151.0799,"North Epping"],[-33.6852,150.953,"North Kellyville"],[-33.7664,151.2578,"North Manly"],[-33.7071,151.2711,"North Narrabeen"],[-33.8571,151.0231,"North Parramatta"],[-33.5579,150.728,"North Richmond"],[-33.7871,151.0125,"North Rocks"],[-33.7932,151.12,"North Ryde"],[-33.7932,151.12,"North Ryde Bc"],[-33.7237,151.1673,"North St Ives"],[-33.764,150.7801,"North St Marys"],[-33.8575,151.1038,"North Strathfield"],[-33.8028,151.1049,"North Sydney"],[-33.8399,151.2046,"North Sydney Shoppingworld"],[-33.7352,151.1237,"North Turramurra"],[-33.6977,151.1311,"North Wahroonga"],[-33.7963,151.1974,"North Willoughby"],[-33.8126,151.2148,"Northbridge"],[-33.7825,150.9964,"Northmead"],[-33.8186,151.1609,"Northwood"],[-33.7586,150.9929,"Norwest"],[-34.0429,150.5253,"Oakdale"],[-33.742,150.8475,"Oakhurst"],[-33.663,150.8603,"Oakville"],[-33.7971,151.0422,"Oatlands"],[-33.9803,151.0718,"Oatley"],[-33.8583,150.9837,"Old Guildford"],[-33.7894,150.9595,"Old Toongabbie"],[-34.0429,150.5253,"Oran Park"],[-34.0429,150.5253,"Orangeville"],[-33.811,150.7232,"Orchard Hills"],[-33.8186,151.1609,"Osborne Park"],[-34.2309,150.9697,"Otford"],[-33.7664,151.2578,"Oxford Falls"],[-33.764,150.7801,"Oxley Park"],[-33.9974,151.0879,"Oyster Bay"],[-33.8957,151.2272,"Paddington"],[-33.9614,151.0322,"Padstow"],[-33.9614,151.0322,"Padstow Heights"],[-33.9456,151.2413,"Pagewood"],[-33.6038,151.3228,"Palm Beach"],[-34.125,151.0556,"Palona"],[-33.9641,150.9978,"Panania"],[-33.6348,151.3233,"Paradise Beach"],[-33.7379,150.9227,"Parklea"],[-33.86,151.2566,"Parliament House"],[-33.8862,151.1395,"Parramatta"],[-33.8145,151.0065,"Parramatta Westfield"],[-33.4821,151.3312,"Patonga"],[-33.9577,151.0523,"Peakhurst"],[-33.9654,151.05,"Peakhurst Dc"],[-33.9577,151.0523,"Peakhurst Heights"],[-33.4821,151.3312,"Pearl Beach"],[-33.8131,150.9574,"Pemulwuy"],[-33.8131,150.9574,"Pendle Hill"],[-33.7584,151.0491,"Pennant Hills"],[-33.7555,150.6786,"Penrith"],[-33.7555,150.6786,"Penrith Plaza"],[-33.7555,150.6786,"Penrith South"],[-33.9647,151.0848,"Penshurst"],[-33.8972,151.1508,"Petersham"],[-33.8972,151.1508,"Petersham North"],[-34.2956,150.5752,"Pheasants Nest"],[-33.4821,151.3312,"Phegans Bay"],[-33.9696,151.2378,"Phillip Bay"],[-33.4822,151.402,"Picketts Valley"],[-33.9641,150.9978,"Picnic Point"],[-34.1671,150.6225,"Picton"],[-33.4663,150.8874,"Pitt Town"],[-33.5859,150.8461,"Pitt Town Bottoms"],[-33.9511,150.9174,"Pleasure Point"],[-33.742,150.8475,"Plumpton"],[-33.869,151.2505,"Point Piper"],[-33.9696,151.2378,"Port Botany"],[-34.0549,151.1201,"Port Hacking"],[-33.8854,151.0219,"Potts Hill"],[-33.8227,151.1176,"Potts Point"],[-33.872,150.8853,"Prairiewood"],[-33.9284,150.9214,"Prestons"],[-33.5204,151.3744,"Pretty Beach"],[-33.7838,150.9005,"Prospect"],[-33.9301,151.0578,"Punchbowl"],[-33.8166,151.1084,"Putney"],[-33.7573,151.1303,"Pymble"],[-33.8712,151.1931,"Pyrmont"],[-33.7256,150.8955,"Quakers Hill"],[-33.8717,151.2067,"Queen Victoria Building"],[-33.8964,151.245,"Queens Park"],[-33.7768,151.2849,"Queenscliff"],[-34.0273,150.8423,"Raby"],[-33.9744,151.1403,"Ramsgate"],[-33.9744,151.1403,"Ramsgate Beach"],[-33.9148,151.2392,"Randwick"],[-33.9132,151.242,"Randwick Dc"],[-34.1671,150.6225,"Razorback"],[-33.8949,151.2062,"Redfern"],[-33.8854,151.0219,"Regents Park"],[-33.8857,151.028,"Regents Park Dc"],[-33.8713,150.6715,"Regentville"],[-33.9473,151.0145,"Revesby"],[-33.9473,151.0145,"Revesby Heights"],[-33.9473,151.0145,"Revesby North"],[-33.8461,151.086,"Rhodes"],[-33.6722,150.7958,"Richards"],[-33.604,150.6461,"Richmond"],[-33.579,150.7529,"Richmond Lowlands"],[-33.663,150.8603,"Riverstone"],[-33.8186,151.1609,"Riverview"],[-33.9577,151.0523,"Riverwood"],[-33.9554,151.1482,"Rockdale"],[-33.9529,151.138,"Rockdale Dc"],[-33.866,151.1339,"Rodd Point"],[-33.8725,151.0448,"Rookwood"],[-33.8104,150.8508,"Rooty Hill"],[-33.7291,150.7799,"Ropes Crossing"],[-33.8757,151.267,"Rose Bay"],[-33.8584,151.276,"Rose Bay North"],[-34.0831,151.0077,"Rosebery"],[-33.8327,151.0152,"Rosehill"],[-33.9301,151.0578,"Roselands"],[-34.1942,150.7684,"Rosemeadow"],[-33.7802,151.1954,"Roseville"],[-33.7802,151.1954,"Roseville Chase"],[-33.9935,150.7749,"Rossmore"],[-33.6903,151.0404,"Round Corner"],[-33.7315,150.9311,"Rouse Hill"],[-33.8653,151.2079,"Royal Exchange"],[-33.8284,151.1922,"Royal North Shore Hospital"],[-33.8672,151.1719,"Rozelle"],[-34.1942,150.7684,"Ruse"],[-33.8736,151.2216,"Rushcutters Bay"],[-33.866,151.1339,"Russell Lea"],[-33.8144,151.0369,"Rydalmere"],[-33.7615,151.1378,"Ryde"],[-33.4663,150.8874,"Sackville"],[-33.4663,150.8874,"Sackville North"],[-33.9159,150.8753,"Sadleir"],[-33.9966,151.1325,"Sandringham"],[-33.9511,150.9174,"Sandy Point"],[-33.9966,151.1325,"Sans Souci"],[-33.4822,151.402,"Saratoga"],[-33.4663,150.8874,"Scheyville"],[-33.7006,150.8801,"Schofields"],[-33.6422,151.2783,"Scotland Island"],[-33.7966,151.2418,"Seaforth"],[-33.8835,151.0041,"Sefton"],[-33.7603,150.9669,"Seven Hills"],[-33.7779,150.932,"Seven Hills Mc"],[-33.7661,150.9358,"Seven Hills West"],[-33.7564,150.8102,"Shalvey"],[-33.7356,150.7217,"Shane Park"],[-33.7223,150.7394,"Shanes Park"],[-33.9365,150.586,"Silverdale"],[-33.8233,151.0514,"Silverwater"],[-33.4754,151.0708,"Singletons Mill"],[-34.0552,150.7565,"Smeaton Grange"],[-33.8442,150.875,"Smithfield"],[-33.8442,150.875,"Smithfield West"],[-33.9291,151.2522,"South Coogee"],[-33.8578,151.0107,"South Granville"],[-33.9922,151.106,"South Hurstville"],[-33.4663,150.8874,"South Maroota"],[-33.7555,150.6786,"South Penrith"],[-33.7352,151.1237,"South Turramurra"],[-33.8131,150.9574,"South Wentworthville"],[-33.4663,150.8874,"South Windsor"],[-34.0641,151.094,"Southern Suburbs Mc"],[-33.8307,151.2434,"Spit Junction"],[-34.0429,150.5253,"Spring Farm"],[-33.6925,150.588,"Springwood"],[-34.0273,150.8423,"St Andrews"],[-34.1942,150.7684,"St Helens Park"],[-33.5204,151.3744,"St Huberts Island"],[-33.7237,151.1673,"St Ives"],[-33.7237,151.1673,"St Ives Chase"],[-33.872,150.8853,"St Johns Park"],[-33.859,151.1955,"St Marys"],[-33.764,150.7801,"St Marys East"],[-33.764,150.7801,"St Marys South"],[-33.9148,151.2392,"St Pauls"],[-33.9207,151.1707,"St Peters"],[-33.9195,151.177,"St Peters Dc"],[-33.7379,150.9227,"Stanhope Gardens"],[-33.8942,151.1656,"Stanmore"],[-34.2309,150.9697,"Stanwell Park"],[-34.2309,150.9697,"Stanwell Tops"],[-33.8771,151.0933,"Strathfield"],[-33.8929,151.0877,"Strathfield South"],[-33.7261,150.9318,"Strawberry Hills"],[-33.8928,151.1359,"Summer Hill"],[-33.6925,150.588,"Sun Valley"],[-33.8841,151.2123,"Surry Hills"],[-34.0157,151.0622,"Sutherland"],[-33.9207,151.1707,"Sydenham"],[-33.7949,151.2681,"Sydney"],[-33.9362,151.1768,"Sydney Domestic Airport"],[-33.8688,151.209,"Sydney Gateway Facility"],[-33.9362,151.1768,"Sydney International Airport"],[-33.8641,151.0696,"Sydney Markets"],[-33.8397,151.0689,"Sydney Olympic Park"],[-33.8156,151.0425,"Sydney South"],[-34.0136,151.1019,"Sylvania"],[-34.0136,151.1019,"Sylvania Southgate"],[-34.0136,151.1019,"Sylvania Waters"],[-34.2184,150.5846,"Tahmoor"],[-33.6972,150.8884,"Tallawong"],[-33.891,151.269,"Tamarama"],[-34.0549,151.1201,"Taren Point"],[-33.8841,151.2123,"Taylor Square"],[-33.6348,151.3233,"Taylors Point"],[-33.7971,151.0422,"Telopea"],[-33.9207,151.1707,"Tempe"],[-33.5579,150.728,"Tennyson"],[-33.83,151.1245,"Tennyson Point"],[-33.651,151.2169,"Terrey Hills"],[-33.4254,151.4369,"Terrigal"],[-33.6038,151.3228,"The Basin"],[-33.5429,150.532,"The Devils Wilderness"],[-34.0429,150.5253,"The Oaks"],[-33.7055,150.9055,"The Ponds"],[-33.86,151.2566,"The Rocks"],[-33.5579,150.728,"The Slopes"],[-33.8892,151.1865,"The University Of Sydney"],[-34.0429,150.5253,"Theresa Park"],[-34.1931,150.5592,"Thirlmere"],[-33.7311,151.0736,"Thornleigh"],[-33.7894,150.9595,"Toongabbie"],[-33.7894,150.9595,"Toongabbie East"],[-33.7564,150.8102,"Tregear"],[-33.7352,151.1237,"Turramurra"],[-33.9376,151.148,"Turrella"],[-34.1231,151.0243,"Uloola"],[-33.8832,151.1967,"Ultimo"],[-33.5204,151.3744,"Umina Beach"],[-33.9261,151.1229,"Undercliffe"],[-33.9066,151.2344,"Unsw Sydney"],[-33.4663,150.8874,"Upper Colo"],[-33.6925,150.588,"Valley Heights"],[-34.0273,150.8423,"Varroville"],[-33.8584,151.276,"Vaucluse"],[-33.8872,150.9795,"Villawood"],[-33.663,150.8603,"Vineyard"],[-33.9511,150.9174,"Voyager Point"],[-33.5204,151.3744,"Wagstaffe"],[-33.7233,151.1082,"Wahroonga"],[-33.6919,151.0975,"Waitara"],[-33.872,150.8853,"Wakeley"],[-33.8713,150.6715,"Wallacia"],[-33.4254,151.4369,"Wamberal"],[-33.866,151.1339,"Wareemba"],[-33.9365,150.586,"Warragamba"],[-33.7352,151.1237,"Warrawee"],[-33.6899,151.291,"Warriewood"],[-33.694,151.301,"Warriewood Dc"],[-33.6899,151.291,"Warriewood Shopping Square"],[-33.7327,150.629,"Warrimoo"],[-33.7664,151.2578,"Warringah Mall"],[-34.0549,151.1201,"Warumbul"],[-33.9284,150.9214,"Warwick Farm"],[-34.1146,151.0279,"Waterfall"],[-33.9028,151.0579,"Waterloo"],[-33.9003,151.206,"Waterloo Dc"],[-33.8584,151.276,"Watsons Bay"],[-34.1336,151.1041,"Wattamolla"],[-34.0742,150.9196,"Wattle Grove"],[-34.2832,150.4274,"Wattle Ridge"],[-33.9044,151.2594,"Waverley"],[-33.8399,151.2046,"Waverton"],[-34.1942,150.7684,"Wedderburn"],[-33.8276,151.0772,"Wentworth Point"],[-33.8888,150.8865,"Wentworth Port"],[-33.8131,150.9574,"Wentworthville"],[-34.0429,150.5253,"Werombi"],[-33.7223,150.7394,"Werrington"],[-33.7223,150.7394,"Werrington County"],[-33.7223,150.7394,"Werrington Downs"],[-33.8246,151.2073,"West Chatswood"],[-33.422,151.3236,"West Gosford"],[-33.9596,150.9709,"West Hoxton"],[-33.7526,151.0318,"West Pennant Hills"],[-33.7573,151.1303,"West Pymble"],[-33.8041,151.0906,"West Ryde"],[-33.8942,151.1656,"Westgate"],[-33.7311,151.0736,"Westleigh"],[-33.8131,150.9574,"Westmead"],[-33.8498,150.911,"Wetherill Park"],[-33.847,150.903,"Wetherill Park Bc"],[-33.8498,150.911,"Wetherill Park Dc"],[-33.7564,150.8102,"Whalan"],[-33.6348,151.3233,"Whale Beach"],[-33.7396,151.2979,"Wheeler Heights"],[-33.4836,150.6018,"Wheeny Creek"],[-33.4663,150.8874,"Wilberforce"],[-33.9245,151.0769,"Wiley Park"],[-33.7564,150.8102,"Willmot"],[-33.8009,151.2027,"Willoughby"],[-33.7991,151.2063,"Willoughby East"],[-33.8009,151.2027,"Willoughby North"],[-34.1671,150.6225,"Wilton"],[-33.4663,150.8874,"Windsor"],[-33.4663,150.8874,"Windsor Downs"],[-33.7489,151.28,"Wingala"],[-33.6925,150.588,"Winmalee"],[-33.7317,150.9559,"Winston Hills"],[-33.9376,151.148,"Wolli Creek"],[-33.8284,151.1922,"Wollstonecraft"],[-33.4821,151.3312,"Wondabyne"],[-34.1942,150.7684,"Woodbine"],[-33.7638,150.8711,"Woodcroft"],[-33.8442,150.875,"Woodpark"],[-33.8887,151.2405,"Woollahra"],[-33.8736,151.2216,"Woolloomooloo"],[-34.0932,151.1366,"Woolooware"],[-33.8361,151.1491,"Woolwich"],[-33.8771,151.2069,"World Square"],[-34.0618,151.0643,"Woronora"],[-34.1632,150.9354,"Woronora Dam"],[-34.1146,151.0279,"Woronora Heights"],[-33.4821,151.3312,"Woy Woy"],[-33.4821,151.3312,"Woy Woy Bay"],[-33.9056,151.0232,"Yagoona"],[-33.9056,151.0232,"Yagoona West"],[-34.2956,150.5752,"Yanderra"],[-33.604,150.6461,"Yarramundi"],[-34.1146,151.0279,"Yarrawarrah"],[-33.4822,151.402,"Yattalunga"],[-34.1016,151.0852,"Yenabilli"],[-33.8583,150.9837,"Yennora"],[-33.8329,150.4356,"Yosemite"],[-34.0377,151.1016,"Yowie Bay"],[-33.9039,151.2063,"Zetland"]],"major":[[-33.7949,151.2681,"Sydney"],[-32.9316,151.778,"Newcastle"],[-34.4232,150.8743,"Wollongong"],[-33.3254,151.1892,"Gosford"],[-33.8862,151.1395,"Parramatta"],[-33.7555,150.6786,"Penrith"],[-33.8883,151.1036,"Liverpool"],[-34.1942,150.7684,"Campbelltown"],[-33.7838,150.9005,"Blacktown"],[-33.9074,151.0246,"Bankstown"],[-33.7077,151.0998,"Hornsby"],[-33.8937,151.2625,"Bondi Junction"],[-33.792,151.1899,"Chatswood"],[-33.3298,151.5051,"Manly"],[-34.0932,151.1366,"Cronulla"],[-33.8329,150.4356,"Katoomba"],[-33.3107,150.3569,"Lithgow"],[-33.8208,149.4744,"Bathurst"],[-33.2339,149.1163,"Orange"],[-32.2422,148.6573,"Dubbo"],[-31.3336,151.1383,"Tamworth"],[-30.4934,151.9062,"Armidale"],[-30.0977,152.6583,"Coffs Harbour"],[-31.4396,152.8725,"Port Macquarie"],[-31.8993,152.5032,"Taree"],[-28.7065,153.2594,"Lismore"],[-28.6608,153.5928,"Byron Bay"],[-28.1842,153.5268,"Tweed Heads"],[-29.3208,153.2711,"Grafton"],[-30.1704,142.2034,"Broken Hill"],[-35.0746,147.3762,"Wagga Wagga"],[-36.0162,147.0265,"Albury"],[-34.3214,145.9146,"Griffith"],[-34.7263,149.7292,"Goulburn"],[-35.3174,149.2571,"Queanbeyan"],[-34.5256,150.5035,"Bowral"],[-34.9906,150.451,"Nowra"],[-35.6713,150.1259,"Batemans Bay"],[-36.7378,149.6992,"Bega"],[-36.1773,149.1292,"Cooma"],[-29.4749,149.4621,"Moree"],[-30.2059,145.2514,"Bourke"],[-31.5518,145.4066,"Cobar"],[-32.7417,151.5437,"Maitland"],[-32.9779,151.3175,"Cessnock"],[-32.7605,150.9721,"Singleton"],[-32.2486,150.7019,"Muswellbrook"],[-32.1967,152.4542,"Forster"],[-32.7462,152.1937,"Nelson Bay"],[-34.6454,150.7569,"Kiama"],[-35.5224,150.3932,"Ulladulla"]]},"dateMin":"2026-01-04","dateMax":"2026-09-21","sydUnit":[261.811,176.842]};
+  var SB_URL = 'https://tfpgywqmwnjesesfcmcg.supabase.co', SB_KEY = 'sb_publishable_j6MIouzm484dXuHqH76JNw_39ol8cBx';
+  var points = [], jobs = [], regionRows = D.regionRows, cities = D.cities;
+  var DMIN = D.dateMin, DMAX = D.dateMax;
 
-const DESC_TO_MODEL = {};
-Object.keys(MODEL_DESC).forEach(m => { DESC_TO_MODEL[MODEL_DESC[m]] = m; });
+  function sbFetch(table, cb){
+    var url = SB_URL + '/rest/v1/' + table + '?select=*&limit=5000';
+    fetch(url, {headers:{apikey:SB_KEY, Authorization:'Bearer '+SB_KEY}})
+      .then(function(r){ if(!r.ok) throw new Error(table+' '+r.status); return r.json(); })
+      .then(function(rows){ cb(null, rows); })
+      .catch(function(e){ cb(e); });
+  }
 
-const icon = {
-  pin: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
-  lock: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-  trend: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 5"/><polyline points="14 5 21 5 21 12"/></svg>`,
-  flow: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.2 7.2 15.8 10.8M8.2 16.8 15.8 13.2"/></svg>`,
-  alert: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`,
-  plus: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>`,
-  check: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>`,
-  print: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`,
-};
-
-const stateColorMap = { NSW: 'var(--nsw)', VIC: 'var(--vic)', SA: 'var(--sa)', WA: 'var(--wa)', QLD: 'var(--qld)' };
-const modelFullName = {
-  'DDL709': 'Philips Facial Recognition Intercom (DDL709)',
-  '7300-5HB': 'Digital Door Lock EasyKey (7300-5HB)',
-  'DDL210-1H': 'Digital Door Lock (DDL210-1H)',
-  'DDL615': 'Fingerprint & PIN Share Lock (DDL615)',
-};
-
-const STATE_TOTALS = (() => {
-  const counts = {};
-  MASTER.forEach(s => { counts[s.state] = (counts[s.state] || 0) + 1; });
-  return counts;
-})();
-const STATE_ORDER = ['VIC', 'NSW', 'QLD', 'WA', 'SA'];
-const PRODUCT_TOTALS = (() => {
-  const totals = {};
-  Object.keys(MODEL_DESC).forEach(m => { totals[m] = { installed: 0, total: 0 }; });
-  MASTER.forEach(s => {
-    Object.keys(MODEL_DESC).forEach(m => {
-      totals[m].total += 1;
-      if (s.models.includes(m)) totals[m].installed += 1;
-    });
-  });
-  return totals;
-})();
-
-function itemKey(it) { return it.store + '|' + it.model; }
-
-function weekLabelFromWkStart(wkStart) {
-  // wkStart format YYYYMMDD (Monday), label date = +6 days
-  const y = parseInt(wkStart.slice(0,4)), mo = parseInt(wkStart.slice(4,6))-1, d = parseInt(wkStart.slice(6,8));
-  const dt = new Date(Date.UTC(y, mo, d));
-  dt.setUTCDate(dt.getUTCDate() + 6);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return months[dt.getUTCMonth()] + ' ' + dt.getUTCDate();
-}
-
-function parseCsvToSnapshot(csvText) {
-  const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-  const rows = parsed.data;
-  if (!rows.length) throw new Error('No rows found in file');
-  const wkStart = rows.find(r => r.Wk_Start)?.Wk_Start;
-  if (!wkStart) throw new Error('Could not find Wk_Start column');
-
-  const lookup = {};
-  rows.forEach(r => {
-    const storeNo = parseInt(r.Store, 10);
-    if (!storeNo || !r.Description) return;
-    lookup[storeNo + '|' + r.Description] = { status: r.Status, soh: r.SOH !== undefined && r.SOH !== '' ? parseFloat(r.SOH) : null };
-  });
-
-  const deranged = [];
-  MASTER.forEach(s => {
-    s.models.forEach(m => {
-      const desc = MODEL_DESC[m];
-      const rec = lookup[s.store + '|' + desc];
-      if (rec && rec.status === 'De-Ranged') {
-        deranged.push({ store: s.store, state: s.state, name: s.name, model: m, soh: rec.soh });
+  function haversine(a1,o1,a2,o2){
+    var R=6371, p1=a1*Math.PI/180, p2=a2*Math.PI/180;
+    var dp=(a2-a1)*Math.PI/180, dl=(o2-o1)*Math.PI/180;
+    var x=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+    return 2*R*Math.asin(Math.sqrt(x));
+  }
+  /* Nearest locksmith is computed here, not stored, so a job inserted by an
+     automation only needs customer / suburb / lat / lng / status / job_date. */
+  function attachNearest(j){
+    var bd=null, b=null;
+    for(var i=0;i<points.length;i++){
+      var p=points[i], d=haversine(j.lat,j.lng,p.lat,p.lng);
+      if(bd===null||d<bd){ bd=d; b=p; }
+    }
+    j.d = bd===null ? 0 : Math.round(bd*10)/10;
+    j.ls = b ? b.n : 'No locksmith mapped';
+    j.llat = b ? b.lat : j.lat;
+    j.llng = b ? b.lng : j.lng;
+    return j;
+  }
+  function cityOf(lat,lng){
+    for(var i=0;i<cities.length;i++){
+      var poly=cities[i].poly, inside=false, n=poly.length, k=n-1;
+      for(var m=0;m<n;m++){
+        var yi=poly[m][0], xi=poly[m][1], yj=poly[k][0], xj=poly[k][1];
+        if(((yi>lat)!==(yj>lat)) && (lng < (xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi)) inside=!inside;
+        k=m;
       }
+      if(inside) return cities[i].name;
+    }
+    return 'Outside Greater Sydney';
+  }
+
+  function estimateMinutes(d){
+    var m = d<=15 ? (d/30*60) : (30 + (d-15)/70*60);
+    return Math.max(1, Math.round(m));
+  }
+  function bandColor(mins){
+    if(mins<=7) return '#2e9e5b';
+    if(mins<=20) return '#e0a32e';
+    return '#cf4034';
+  }
+  function cityColour(c){
+    return c==='Eastern Harbour City'?'#1f6fb2':c==='Central River City'?'#d2691e':
+           c==='Western Parkland City'?'#2e7d4f':'#5d6b7a';
+  }
+  function fmtDate(iso){
+    var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var p=iso.split('-'); return (+p[2])+' '+M[+p[1]-1]+' '+p[0];
+  }
+  function shiftDays(iso, n){
+    var p=iso.split('-'), dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+    dt.setUTCDate(dt.getUTCDate()+n);
+    return dt.toISOString().slice(0,10);
+  }
+
+  /* ---------- map + basemap ---------- */
+  var map = L.map('leafletMap', {scrollWheelZoom:true, zoomControl:false});
+  map.setView([-33.87, 150.95], 10);   // a view must exist before any layer asks for bounds
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  L.control.scale({imperial:false, position:'bottomright'}).addTo(map);
+
+  /* ---------- basemaps ----------
+     Built-in offline map first: it needs no tile server and no API key, so the page always
+     renders. Online tile layers are offered too, but most free providers now either require
+     a key (CARTO, Esri) or refuse requests from a locally-opened file (OpenStreetMap). */
+  var OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  map.createPane('offlinePane');
+  map.getPane('offlinePane').style.zIndex = 250;
+
+  var offlineGroup = L.layerGroup();
+  /* The state outline is only accurate enough for a zoomed-out view, so it is shown
+     below zoom 10 and hidden above it rather than implying a coastline it cannot draw. */
+  var nswShape = L.polygon(D.nswRings, {pane:'offlinePane', color:'#9fb3c4', weight:1,
+                                        fillColor:'#f2efe6', fillOpacity:1});
+  var placeLayer = L.layerGroup().addTo(offlineGroup);
+
+  function placeIcon(name, major){
+    return L.divIcon({className:'', iconSize:[0,0],
+      html:'<div class="place'+(major?' major':'')+'"><i></i><span>'+name+'</span></div>'});
+  }
+  function renderPlaces(){
+    if(!map.hasLayer(offlineGroup)){ offlineGroup.removeLayer(nswShape); return; }
+    var z = map.getZoom(), b = map.getBounds();
+    if(z <= 9){ if(!offlineGroup.hasLayer(nswShape)) nswShape.addTo(offlineGroup); }
+    else { offlineGroup.removeLayer(nswShape); }
+    document.getElementById('mapFrame').classList.toggle('offline-wide', z <= 9);
+    placeLayer.clearLayers();
+
+    /* majors first, then suburbs, dropping any label that would collide with one already placed */
+    var candidates = D.places.major.map(function(pl){ return {pl:pl, major:true}; });
+    if(z >= 10) candidates = candidates.concat(D.places.syd.map(function(pl){ return {pl:pl, major:false}; }));
+
+    var taken = {}, CW = 86, CH = 26, shown = 0, LIMIT = 90;
+    for(var i=0; i<candidates.length && shown<LIMIT; i++){
+      var c = candidates[i], lat = c.pl[0], lng = c.pl[1];
+      if(!b.contains([lat, lng])) continue;
+      var pt = map.latLngToContainerPoint([lat, lng]);
+      var cell = Math.round(pt.x/CW) + ':' + Math.round(pt.y/CH);
+      if(taken[cell]) continue;
+      taken[cell] = 1;
+      L.marker([lat, lng], {pane:'offlinePane', interactive:false,
+                            icon:placeIcon(c.pl[2], c.major)}).addTo(placeLayer);
+      shown++;
+    }
+  }
+  map.on('moveend zoomend', renderPlaces);
+
+  var MAPTILER_KEY = '';
+  try { MAPTILER_KEY = localStorage.getItem('ddl_maptiler_key') || ''; } catch(e){}
+
+  function providerList(){
+    var list = [
+      {key:'Offline Map (No Key Needed)', offline:true},
+      {key:'Street Map — OpenStreetMap', url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+       test:'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+       opts:{maxZoom:19, attribution:OSM_ATTR}},
+      {key:'Street Map — Standard', url:'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+       test:'https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+       opts:{maxZoom:19, subdomains:'abc', attribution:OSM_ATTR+' &middot; OSM France'}},
+      {key:'Street Map — Plain', url:'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+       test:'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+       opts:{maxZoom:19, subdomains:'abc', attribution:OSM_ATTR+' &middot; HOT'}}
+    ];
+    if(MAPTILER_KEY){
+      list.push({key:'Street Map — MapTiler (Your Key)',
+        url:'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key='+MAPTILER_KEY,
+        test:'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key='+MAPTILER_KEY,
+        opts:{maxZoom:19, attribution:OSM_ATTR+' &copy; <a href="https://www.maptiler.com/">MapTiler</a>'}});
+    }
+    return list;
+  }
+  var PROVIDERS = providerList(), baseLayers = {};
+  function buildLayers(){
+    baseLayers = {};
+    PROVIDERS.forEach(function(pv){
+      baseLayers[pv.key] = pv.offline ? offlineGroup : L.tileLayer(pv.url, pv.opts);
     });
-  });
+  }
+  buildLayers();
+  var activeLayer = null, layerControl = null;
 
-  return { weekStart: wkStart, label: weekLabelFromWkStart(wkStart), deranged };
-}
+  function banner(msg, kind){
+    var el = document.getElementById('mapMsg');
+    el.textContent = msg || '';
+    el.className = 'ov interactive' + (kind==='bad' ? ' bad' : '');
+    el.style.display = msg ? 'block' : 'none';
+  }
 
-const TRACKER_URL = 'https://vggbzpvgukprwpopewot.supabase.co';
-const TRACKER_KEY = 'sb_publishable_hG5I11kQ9k5IBYrHaCTkRg_WrwCXYAG';
-
-// Pulls the latest week straight from the shared Inventory Tracker database instead
-// of a manually uploaded CSV. Same matching logic as parseCsvToSnapshot: for every
-// (store, model) pair we track, look up that store status for that model
-// description in the latest week, and flag it if De-Ranged.
-async function syncFromTracker() {
-  const headers = { apikey: TRACKER_KEY, Authorization: 'Bearer ' + TRACKER_KEY };
-
-  const wkRes = await fetch(TRACKER_URL + '/rest/v1/bunnings_facts?select=wk_start&country=eq.AU&order=wk_start.desc&limit=1', { headers });
-  if (!wkRes.ok) throw new Error('Could not reach the Inventory Tracker (' + wkRes.status + ')');
-  const wkData = await wkRes.json();
-  if (!wkData.length) throw new Error('No data found in the Inventory Tracker yet.');
-  const latestWk = wkData[0].wk_start;
-
-  // Read description straight off each row in the base table for this week,
-  // rather than joining through a separate item->description lookup: the same
-  // item code can carry inconsistent description text across different rows
-  // (a Bunnings export quirk), so a per-item lookup can silently pick the
-  // wrong variant. Using each row's own description avoids that entirely.
-  const rowsRes = await fetch(TRACKER_URL + '/rest/v1/bunnings_weekly_inventory?select=item,store,description,status,soh&country=eq.AU&wk_start=eq.' + latestWk, { headers });
-  if (!rowsRes.ok) throw new Error('Could not read data from the Inventory Tracker');
-  const rows = await rowsRes.json();
-
-  const lookup = {};
-  rows.forEach(f => {
-    if (!f.description) return;
-    lookup[f.store + '|' + f.description] = { status: f.status, soh: f.soh };
-  });
-
-  const deranged = [];
-  MASTER.forEach(s => {
-    s.models.forEach(m => {
-      const desc = MODEL_DESC[m];
-      const rec = lookup[s.store + '|' + desc];
-      if (rec && rec.status === 'De-Ranged') {
-        deranged.push({ store: s.store, state: s.state, name: s.name, model: m, soh: rec.soh });
-      }
+  /* A blocked or key-gated tile still arrives as a perfectly valid image, so "did it load"
+     proves nothing - that is why the map flipped onto a wall of "Access Blocked" tiles before.
+     Instead fetch two tiles from far-apart places: real tiles always differ in size, while a
+     "403" or "API Key Required" placeholder is byte-identical everywhere. */
+  function checkTiles(pv, cb){
+    if(pv.offline) return cb('ok');
+    function u(z,x,y){ return pv.test.replace('{z}',z).replace('{x}',x).replace('{y}',y); }
+    Promise.all([u(10,941,614), u(10,300,400)].map(function(url){
+      return fetch(url, {cache:'no-store'}).then(function(r){
+        return r.ok ? r.blob().then(function(b){ return b.size; }) : -1;
+      }).catch(function(){ return null; });
+    })).then(function(sz){
+      if(sz[0] === null || sz[1] === null) return cb('unknown');
+      if(sz[0] < 0 || sz[1] < 0) return cb('refused');
+      cb(sz[0] === sz[1] ? 'placeholder' : 'ok');
     });
+  }
+
+  function selectByName(name){
+    for(var i=0;i<PROVIDERS.length;i++) if(PROVIDERS[i].key === name) return i;
+    return 0;
+  }
+
+  var switching = false;
+  function refreshControl(){
+    if(layerControl) map.removeControl(layerControl);
+    layerControl = L.control.layers(baseLayers, null, {position:'topleft', collapsed:true}).addTo(map);
+  }
+  function showBase(i, silent){
+    var pv = PROVIDERS[i];
+    switching = true;                      // Leaflet fires baselayerchange on a programmatic add
+    if(activeLayer) map.removeLayer(activeLayer);
+    activeLayer = baseLayers[pv.key];
+    activeLayer.addTo(map);
+    if(activeLayer.bringToBack) activeLayer.bringToBack();
+    switching = false;
+    document.getElementById('mapFrame').classList.toggle('offline-base', !!pv.offline);
+    renderPlaces();
+    if(!pv.offline && !silent){
+      checkTiles(pv, function(res){
+        if(res === 'ok'){ banner(''); return; }
+        var why = res === 'placeholder'
+          ? 'that provider is serving placeholder tiles (blocked, or an API key is required)'
+          : res === 'refused' ? 'that provider refused the request'
+          : 'those tiles could not be verified from a local file';
+        banner('Switched back to the built-in map — ' + why + '.', 'bad');
+        showBase(0, true);
+      });
+    }
+  }
+  refreshControl();
+  map.on('baselayerchange', function(e){
+    if(switching) return;                  // only react to a real click in the layers picker
+    banner('');
+    showBase(selectByName(e.name));
   });
 
-  const wkStartCompact = latestWk.replace(/-/g, '');
-  return { weekStart: wkStartCompact, label: weekLabelFromWkStart(wkStartCompact), deranged };
-}
-
-async function seedIfEmpty() {
-  const rows = SEED_HISTORY.map(s => ({
-    week_start: s.weekStart, week_label: s.label, deranged: s.deranged,
-  }));
-  const { error } = await supabaseClient
-    .from(SNAPSHOTS_TABLE)
-    .upsert(rows, { onConflict: 'week_start' });
-  if (error) console.error('Seed error', error);
-}
-
-async function loadSnapshots() {
-  const { data, error } = await supabaseClient
-    .from(SNAPSHOTS_TABLE)
-    .select('week_start, week_label, deranged')
-    .order('week_start', { ascending: true });
-
-  if (error) {
-    console.error('Load error', error);
-    throw new Error('Could not reach Supabase — showing local seed data instead. ' + error.message);
-  }
-  if (!data || data.length === 0) {
-    await seedIfEmpty();
-    return JSON.parse(JSON.stringify(SEED_HISTORY));
-  }
-  return data.map(r => ({ weekStart: r.week_start, label: r.week_label, deranged: r.deranged }));
-}
-
-async function saveSnapshot(snap) {
-  const { error } = await supabaseClient
-    .from(SNAPSHOTS_TABLE)
-    .upsert(
-      { week_start: snap.weekStart, week_label: snap.label, deranged: snap.deranged },
-      { onConflict: 'week_start' }
-    );
-  if (error) throw error;
-}
-
-function filteredItems(snapshot) {
-  if (!snapshot) return [];
-  return snapshot.deranged.filter(it => !EXCLUDED_MODELS.includes(it.model));
-}
-
-function computeWeeksOutstanding(snapshots, latestIdx, item) {
-  let weeks = 0;
-  for (let i = latestIdx; i >= 0; i--) {
-    const items = filteredItems(snapshots[i]);
-    if (items.some(it => itemKey(it) === itemKey(item))) { weeks++; } else { break; }
-  }
-  return weeks;
-}
-
-function daysFromWeeks(weeks) { return (weeks - 1) * 7; }
-
-function renderDashboard(snapshots) {
-  const root = document.getElementById('root');
-  if (!snapshots.length) {
-    root.innerHTML = '<div class="section"><p>No data yet. Upload a weekly CSV to get started.</p></div>';
-    return;
-  }
-  const latestIdx = snapshots.length - 1;
-  const latest = snapshots[latestIdx];
-  const prev = latestIdx > 0 ? snapshots[latestIdx - 1] : null;
-
-  const latestItems = filteredItems(latest);
-  const prevItems = filteredItems(prev);
-  const prevKeys = new Set(prevItems.map(itemKey));
-  const latestKeys = new Set(latestItems.map(itemKey));
-
-  const newItems = latestItems.filter(it => !prevKeys.has(itemKey(it)));
-  const carriedItems = latestItems.filter(it => prevKeys.has(itemKey(it)));
-  const resolvedItems = prevItems.filter(it => !latestKeys.has(itemKey(it)));
-
-  const withWeeks = (list) => list.map(it => ({ ...it, weeksOut: computeWeeksOutstanding(snapshots, latestIdx, it) }));
-  const carriedWithWeeks = withWeeks(carriedItems);
-  const newWithWeeks = newItems.map(it => ({ ...it, weeksOut: 1 }));
-
-  const issuesByState = {};
-  STATE_ORDER.forEach(s => issuesByState[s] = 0);
-  latestItems.forEach(it => { issuesByState[it.state] = (issuesByState[it.state] || 0) + 1; });
-
-  const trendData = snapshots.map(s => ({ label: s.label, value: filteredItems(s).length }));
-
-  const delta = prev ? latestItems.length - prevItems.length : 0;
-  const trendClass = delta > 0 ? 'up-bad' : (delta < 0 ? 'down-good' : 'flat');
-  const trendSymbol = delta > 0 ? ('▲ +' + delta) : (delta < 0 ? ('▼ ' + delta) : '— flat');
-  const trendHtml = prev ? `<span class="trend ${trendClass}">${trendSymbol}</span>` : '';
-
-  function itemRow(e) {
-    const days = daysFromWeeks(e.weeksOut);
-    const dayPill = days > 0
-      ? `<span class="pill pill-days-high">${days}d outstanding</span>`
-      : `<span class="pill pill-days-low">detected this week</span>`;
-    const sohVal = (e.soh === null || e.soh === undefined) ? '—' : e.soh;
-    const sohClass = e.soh === 0 ? 'pill-soh-zero' : 'pill-soh';
-    return `
-      <div class="item">
-        <div class="item-main">
-          <span class="state-dot" style="background:${stateColorMap[e.state] || '#94a3b8'};"></span>
-          <div>
-            <div class="item-store">${e.name} <span style="color:var(--muted); font-weight:500;">(${e.state})</span></div>
-            <div class="item-detail">${modelFullName[e.model] || e.model}</div>
-          </div>
-        </div>
-        <div class="item-badges">
-          <span class="pill ${sohClass}">SOH: ${sohVal}</span>
-          ${dayPill}
-        </div>
-      </div>
-    `;
-  }
-  function resolvedRow(e) {
-    return `
-      <div class="item">
-        <div class="item-main">
-          <span class="state-dot" style="background:${stateColorMap[e.state] || '#94a3b8'};"></span>
-          <div>
-            <div class="item-store">${e.name} <span style="color:var(--muted); font-weight:500;">(${e.state})</span></div>
-            <div class="item-detail">${modelFullName[e.model] || e.model} — back to Live</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function stateIssueCards() {
-    const maxIssues = Math.max(...Object.values(issuesByState), 1);
-    const shade = (n) => {
-      if (n === 0) return { bg: '#F1F3F5', text: '#94a3b8' };
-      const t = n / maxIssues;
-      const r = Math.round(253 - t * (253-192));
-      const g = Math.round(236 - t * (236-57));
-      const b = Math.round(234 - t * (234-43));
-      return { bg: `rgb(${r},${g},${b})`, text: t > 0.55 ? '#ffffff' : '#7a2b21' };
-    };
-    return `<div class="issue-card-grid">${STATE_ORDER.map(key => {
-      const n = issuesByState[key] || 0;
-      const { bg, text } = shade(n);
-      return `<div class="issue-card" style="background:${bg};"><div class="issue-card-state" style="color:${text};">${key}</div><div class="issue-card-num" style="color:${text};">${n}</div><div class="issue-card-label" style="color:${text}; opacity:0.85;">issue${n===1?'':'s'}</div></div>`;
-    }).join('')}</div>`;
-  }
-
-  function trendChart() {
-    const pointSpacing = 72, pad = 30, h = 120;
-    const n = trendData.length;
-    const w = Math.max(500, pad * 2 + (n - 1) * pointSpacing);
-    const maxV = Math.max(...trendData.map(p => p.value), 1) * 1.3;
-    const stepX = n > 1 ? (w - pad * 2) / (n - 1) : 0;
-    const pts = trendData.map((p, i) => {
-      const x = pad + i * stepX;
-      const y = h - pad - (p.value / maxV) * (h - pad * 1.7);
-      return { x, y, ...p };
+  /* Start on the built-in map, then quietly test each street source and move up to the
+     first one that genuinely works. */
+  function autoUpgrade(i){
+    if(i >= PROVIDERS.length) return;
+    if(PROVIDERS[i].offline) return autoUpgrade(i+1);
+    checkTiles(PROVIDERS[i], function(res){
+      if(res === 'ok'){ showBase(i, true); banner(''); }
+      else autoUpgrade(i+1);
     });
-    const linePts = pts.map(p => `${p.x},${p.y}`).join(' ');
-    const dots = pts.map(p => `
-      <circle cx="${p.x}" cy="${p.y}" r="5" fill="var(--red)"></circle>
-      <text x="${p.x}" y="${p.y-12}" text-anchor="middle" font-size="13" font-weight="700" fill="#1a2733">${p.value}</text>
-      <text x="${p.x}" y="${h-6}" text-anchor="middle" font-size="11.5" fill="#64748b">${p.label}</text>
-    `).join('');
-    return `<div class="trend-scroll"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${linePts}" fill="none" stroke="var(--red)" stroke-width="2.5"></polyline>${dots}</svg></div>`;
   }
 
-  const totalStores = MASTER.length;
-  const stateBarsHtml = STATE_ORDER.map(name => {
-    const count = STATE_TOTALS[name] || 0;
-    const maxState = Math.max(...Object.values(STATE_TOTALS));
-    const colorVar = { VIC:'var(--vic)', NSW:'var(--nsw)', QLD:'var(--qld)', WA:'var(--wa)', SA:'var(--sa)' }[name];
-    return `<div class="state-row"><div class="state-name">${name}</div><div class="bar-track"><div class="bar-fill" style="width:0%; background:${colorVar};" data-target="${(count/maxState*100).toFixed(1)}"></div></div><div class="state-count">${count}</div></div>`;
-  }).join('');
-
-  const productHtml = Object.keys(PRODUCT_TOTALS).map(m => {
-    const p = PRODUCT_TOTALS[m];
-    const pct = (p.installed / p.total * 100).toFixed(1);
-    return `<div class="product-card"><div class="pname">${modelFullName[m]}</div><div class="product-track"><div class="product-fill" style="width:0%;" data-target="${pct}"></div></div><div class="product-meta"><span>${p.installed} / ${p.total} stores</span><span>${pct}%</span></div></div>`;
-  }).join('');
-
-  root.innerHTML = `
-    <div class="header">
-      <h1>Philips Display Rollout — Status Dashboard</h1>
-      <div class="live-badge"><span class="live-dot"></span>LIVE · Updated ${latest.label}</div>
-      <button class="print-btn" onclick="window.print()">${icon.print} Print / Save PDF</button>
-    </div>
-
-    <div class="upload-panel">
-      <div class="utext">
-        <div class="utitle">Sync latest week from Inventory Tracker</div>
-        <div class="usub">Reads status and SOH straight from the shared Inventory Tracker database — no separate CSV needed. Uses whichever week is most recent there. Re-syncing the same week overwrites it rather than duplicating it.</div>
-        <div id="uploadStatus"></div>
-      </div>
-      <button class="add-btn" id="syncBtn">Sync Latest Week</button>
-    </div>
-
-    <div class="kpi-row">
-      <div class="kpi"><div class="num-row"><div class="num">${totalStores}</div></div><div class="label">Stores Live</div></div>
-      <div class="kpi"><div class="num-row"><div class="num">${STATE_ORDER.length}</div></div><div class="label">States</div></div>
-      <div class="kpi"><div class="num-row"><div class="num">${Object.keys(MODEL_DESC).length}</div></div><div class="label">Product Lines</div></div>
-      <div class="kpi" style="border-color:#f3c7c2;"><div class="num-row"><div class="num" style="color:var(--red);">${latestItems.length}</div>${trendHtml}</div><div class="label" style="color:var(--red);">De-Ranged</div></div>
-    </div>
-
-    <div class="two-col">
-      <div class="section">
-        <h2>${icon.pin} Stores by State</h2>
-        <div class="state-bars">${stateBarsHtml}</div>
-      </div>
-      <div class="section">
-        <h2>${icon.pin} De-Ranged Issues by State</h2>
-        ${stateIssueCards()}
-        <div class="legend-row">
-          <span><span class="legend-dot" style="background:#F1F3F5;"></span>0 issues</span>
-          <span><span class="legend-dot" style="background:#e8968e;"></span>low</span>
-          <span><span class="legend-dot" style="background:var(--red);"></span>high</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>${icon.lock} Product Install Coverage</h2>
-      <div class="product-grid">${productHtml}</div>
-    </div>
-
-    <div class="section">
-      <h2>${icon.trend} De-Ranged Trend (excl. DDL210-1H / DL505)</h2>
-      <div class="trend-chart">${trendChart()}</div>
-      <div class="trend-note">${snapshots.length} week${snapshots.length===1?'':'s'} tracked — updates automatically each time a new CSV is added</div>
-    </div>
-
-    <div class="section">
-      <h2>${icon.flow} This Week's Movement</h2>
-      <div class="pipeline">
-        <div class="pipe-stage stage-new"><div class="pnum">${newItems.length}</div><div class="plabel">New</div></div>
-        <div class="pipe-arrow">·</div>
-        <div class="pipe-stage stage-carried"><div class="pnum">${carriedItems.length}</div><div class="plabel">Carried Over</div></div>
-        <div class="pipe-arrow">·</div>
-        <div class="pipe-stage stage-resolved"><div class="pnum">${resolvedItems.length}</div><div class="plabel">Resolved</div></div>
-      </div>
-    </div>
-
-    ${resolvedItems.length ? `
-    <div class="group group-green">
-      <h2><span class="step-badge step-badge-green">${icon.check}</span> Resolved Since Last Week</h2>
-      <div class="item-list">${resolvedItems.map(resolvedRow).join('')}</div>
-    </div>` : ''}
-
-    <div class="group group-red">
-      <h2><span class="step-badge step-badge-red">1</span> ${icon.alert} Carried Over — Still De-Ranged</h2>
-      <div class="item-list">${carriedWithWeeks.length ? carriedWithWeeks.map(itemRow).join('') : '<div class="empty-note">Nothing carried over this week.</div>'}</div>
-    </div>
-
-    <div class="group group-amber">
-      <h2><span class="step-badge step-badge-amber">2</span> ${icon.plus} New This Week</h2>
-      <div class="item-list">${newWithWeeks.length ? newWithWeeks.map(itemRow).join('') : '<div class="empty-note">No new De-Ranged issues this week.</div>'}</div>
-    </div>
-
-    <ol class="footer-list">
-      <li>Based on the Philips Display Master file (${totalStores} stores) cross-checked against the Bunnings weekly status report.</li>
-      <li>De-Ranged figures exclude DDL210-1H and DL505 per standing instruction.</li>
-      <li>This page reads and writes to a shared Supabase database. Adding a week's CSV updates it for everyone who opens this page — not just your own browser.</li>
-    </ol>
-  `;
-
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      document.querySelectorAll('.bar-fill, .product-fill').forEach(el => { el.style.width = el.dataset.target + '%'; });
-    }, 80);
-  });
-
-  // wire up sync control
-  const syncBtn = document.getElementById('syncBtn');
-  const statusEl = document.getElementById('uploadStatus');
-
-  syncBtn.addEventListener('click', async () => {
-    syncBtn.disabled = true;
-    statusEl.textContent = 'Reading latest week from Inventory Tracker…';
-    statusEl.className = 'upload-status';
-    try {
-      const newSnap = await syncFromTracker();
-      statusEl.textContent = `Saving ${newSnap.label} to Supabase…`;
-      await saveSnapshot(newSnap);
-      const updated = await loadSnapshots();
-      statusEl.textContent = `Synced ${newSnap.label} — visible to everyone now`;
-      statusEl.className = 'upload-status ok';
-      setTimeout(() => renderDashboard(updated), 400);
-    } catch (e) {
-      statusEl.textContent = 'Error: ' + e.message;
-      statusEl.className = 'upload-status err';
-    } finally {
-      syncBtn.disabled = false;
+  document.getElementById('btnKey').addEventListener('click', function(){
+    var k = window.prompt('Paste a free MapTiler API key to turn on street tiles.\n\n' +
+                          'Get one at maptiler.com - free tier, no card needed. ' +
+                          'Leave this blank to remove a saved key.', MAPTILER_KEY || '');
+    if(k === null) return;
+    MAPTILER_KEY = k.trim();
+    try { localStorage.setItem('ddl_maptiler_key', MAPTILER_KEY); } catch(e){}
+    PROVIDERS = providerList(); buildLayers(); refreshControl();
+    if(MAPTILER_KEY){
+      banner('Checking your MapTiler key…');
+      showBase(selectByName('Street Map — MapTiler (Your Key)'));
+    } else {
+      showBase(0, true);
+      banner('Key removed — back on the built-in map.');
     }
   });
-}
 
-(async () => {
-  const root = document.getElementById('root');
-  root.innerHTML = '<div class="section" style="text-align:center; color:var(--muted);">Loading latest data from Supabase…</div>';
-  try {
-    const snapshots = await loadSnapshots();
-    renderDashboard(snapshots);
-  } catch (e) {
-    root.innerHTML = `<div class="section" style="color:var(--red);">
-      <strong>Could not load live data.</strong><br>${e.message}<br><br>
-      Showing the built-in reference data instead — check your internet connection or try reloading.
-    </div>`;
-    renderDashboard(JSON.parse(JSON.stringify(SEED_HISTORY)));
+  showBase(0, true);
+  autoUpgrade(0);
+
+  /* ---------- three cities zones + badges ---------- */
+  var BADGE_AT = {
+    'Eastern Harbour City':  [-33.585, 151.245],
+    'Central River City':    [-33.605, 150.945],
+    'Western Parkland City': [-33.640, 150.640]
+  };
+  var zoneGroup = L.layerGroup(), badgeGroup = L.layerGroup(), badgeMarkers = {};
+  cities.forEach(function(c){
+    L.polygon(c.poly, {color:c.colour, weight:1.4, opacity:.4,
+                       fillColor:c.colour, fillOpacity:.05, interactive:false}).addTo(zoneGroup);
+    var at = BADGE_AT[c.name] || c.poly[0];
+    var m = L.marker(at, {icon:L.divIcon({className:'', html:'', iconSize:[205,58], iconAnchor:[102,29]}),
+                          interactive:false}).addTo(badgeGroup);
+    badgeMarkers[c.name] = m;
+  });
+  zoneGroup.addTo(map); badgeGroup.addTo(map);
+
+  /* ---------- locksmith density + pins ---------- */
+  var heatLayer = null;
+  if(window.L && L.heatLayer){
+    heatLayer = L.heatLayer(points.map(function(p){return [p.lat,p.lng,0.6];}),
+      {radius:34, blur:26, maxZoom:13,
+       gradient:{0.2:'#2e9e5b',0.45:'#c8d92e',0.65:'#e0a32e',1:'#cf4034'}});
+    heatLayer.addTo(map);
   }
+  var lsGroup = L.layerGroup(), lsMarkers = {};
+  points.forEach(function(p, idx){
+    var m = L.circleMarker([p.lat,p.lng], {radius:p.label?6.5:5, color:'#fff', weight:1.4,
+                                           fillColor:'#b3261e', fillOpacity:.95});
+    m.addTo(lsGroup);
+    lsMarkers[idx] = m;
+    if(p.label){
+      var dir = p.lng > 151.10 ? 'left' : 'right';
+      m.bindTooltip(L.tooltip({permanent:true, direction:dir, offset:[dir==='left'?-8:8,0],
+                               className:'ls-label', opacity:1})
+        .setContent('<span>'+p.n+'</span><span class="addr">'+p.a+'</span>'));
+    }
+  });
+  lsGroup.addTo(map);
+
+  /* ---------- job layers, rebuilt whenever the filter changes ---------- */
+  var openGroup = L.layerGroup(), doneGroup = L.layerGroup(),
+      openLines = L.layerGroup(), doneLines = L.layerGroup();
+  openLines.addTo(map); doneLines.addTo(map); doneGroup.addTo(map); openGroup.addTo(map);
+  map.removeLayer(doneLines);
+
+  var filter = {from: DMIN, to: DMAX};
+
+  function inRange(j){ return j.dt >= filter.from && j.dt <= filter.to; }
+  function currentJobs(){ return jobs.filter(inRange); }
+
+  function groupSites(list){
+    var m = {}, out = [];
+    list.forEach(function(j){
+      var k = j.st+'|'+j.c+'|'+j.lat+'|'+j.lng;
+      if(m[k]){ m[k].n++; if(j.dt > m[k].last) m[k].last = j.dt; if(j.dt < m[k].first) m[k].first = j.dt; }
+      else { m[k] = {j:j, n:1, first:j.dt, last:j.dt}; out.push(m[k]); }
+    });
+    return out;
+  }
+
+  function jobPopup(g){
+    var j = g.j, mins = estimateMinutes(j.d), col = bandColor(mins);
+    var when = g.n>1 ? fmtDate(g.first)+' – '+fmtDate(g.last)+' ('+g.n+' jobs)' : fmtDate(g.first);
+    return '<b>'+j.c+'</b>'+j.a+' &middot; '+j.city+'<br>'+
+           (j.st==='Open' ? 'Open work order' : 'Completed job')+' &middot; '+when+
+           '<br><span style="color:'+col+';font-weight:600">~'+mins+' min</span> ('+
+           j.d.toFixed(1)+' km) to '+j.ls;
+  }
+
+  function rebuildJobLayers(list){
+    [openGroup, doneGroup, openLines, doneLines].forEach(function(g){ g.clearLayers(); });
+    var bounds = [];
+    groupSites(list).forEach(function(g){
+      var j = g.j, mins = estimateMinutes(j.d), col = bandColor(mins), isOpen = j.st==='Open';
+      bounds.push([j.lat, j.lng]);
+      L.polyline([[j.lat,j.lng],[j.llat,j.llng]],
+                 isOpen ? {color:col, weight:3.2, opacity:.95}
+                        : {color:col, weight:1.4, opacity:.45, dashArray:'3 6'})
+       .addTo(isOpen ? openLines : doneLines);
+      var m = L.circleMarker([j.lat,j.lng], isOpen
+        ? {radius: j.d>50 ? 7 : 6, color:'#fff', weight:1.4, fillColor:'#1b7f4b', fillOpacity:.95}
+        : {radius:4.2, color:'#fff', weight:1, fillColor:'#4f7fa8', fillOpacity:.85});
+      m.bindPopup(jobPopup(g));
+      m.addTo(isOpen ? openGroup : doneGroup);
+    });
+    return bounds;
+  }
+
+  /* ---------- city cards + badges ---------- */
+  function cityStats(list){
+    var out = {};
+    cities.forEach(function(c){ out[c.name] = {open:0, done:0, mins:[]}; });
+    out['Outside Greater Sydney'] = {open:0, done:0, mins:[]};
+    list.forEach(function(j){
+      var b = out[j.city]; if(!b) return;
+      if(j.st==='Open') b.open++; else b.done++;
+      b.mins.push(estimateMinutes(j.d));
+    });
+    Object.keys(out).forEach(function(k){
+      var ms = out[k].mins.sort(function(a,b){return a-b;});
+      out[k].med = ms.length ? ms[Math.floor(ms.length/2)] : 0;
+      out[k].worst = ms.length ? ms[ms.length-1] : 0;
+    });
+    return out;
+  }
+  var cityRow = document.getElementById('cityRow');
+  cities.forEach(function(c){
+    var d = document.createElement('div');
+    d.className='city-card'; d.id='cc-'+c.name.replace(/\W/g,'');
+    d.style.setProperty('--cc', c.colour);
+    cityRow.appendChild(d);
+  });
+  function renderCities(stats){
+    cities.forEach(function(c){
+      var st = stats[c.name];
+      document.getElementById('cc-'+c.name.replace(/\W/g,'')).innerHTML =
+        '<div class="cc-name">'+c.name+'</div>'+
+        '<div class="cc-centre">Centre: '+c.centre+' &middot; <span style="font-style:italic">'+c.tag+'</span></div>'+
+        '<div class="cc-nums">'+
+          '<div class="cc-num"><div class="v">'+c.ls+'</div><div class="k">Locksmiths</div></div>'+
+          '<div class="cc-num"><div class="v">'+st.open+'</div><div class="k">Open Work Orders</div></div>'+
+          '<div class="cc-num"><div class="v">'+st.done+'</div><div class="k">Completed Jobs</div></div>'+
+          '<div class="cc-num"><div class="v">~'+st.med+' min</div><div class="k">Median to Nearest</div></div>'+
+          '<div class="cc-num"><div class="v">~'+st.worst+' min</div><div class="k">Worst in City</div></div>'+
+        '</div>';
+      badgeMarkers[c.name].setIcon(L.divIcon({className:'', iconSize:[205,58], iconAnchor:[102,29],
+        html:'<div class="city-badge" style="--bdg:'+c.colour+'">'+
+             '<div class="cb-t">'+c.name+'</div>'+
+             '<div class="cb-c">Centre: '+c.centre+'</div>'+
+             '<div class="cb-s">'+c.ls+' locksmiths &middot; '+st.open+' open &middot; '+st.done+
+             ' done &middot; median ~'+st.med+' min</div></div>'}));
+    });
+  }
+
+  /* ---------- tables ---------- */
+  var jobBody = document.getElementById('woBody'),
+      jobStatus = document.getElementById('jobStatus'),
+      jobSearch = document.getElementById('jobSearch'),
+      jobCount = document.getElementById('jobCount'),
+      keyBody = document.getElementById('keyBody');
+
+  function renderJobTable(list){
+    var st = jobStatus.value, q = jobSearch.value.trim().toLowerCase();
+    var rows = groupSites(list).filter(function(g){
+      if(st && g.j.st !== st) return false;
+      if(q && g.j.c.toLowerCase().indexOf(q)<0 && g.j.a.toLowerCase().indexOf(q)<0 &&
+         g.j.ls.toLowerCase().indexOf(q)<0) return false;
+      return true;
+    }).sort(function(a,b){ return b.j.d - a.j.d; });
+    jobBody.innerHTML = '';
+    var jobsShown = 0;
+    rows.forEach(function(g){
+      var j = g.j, mins = estimateMinutes(j.d), col = bandColor(mins);
+      jobsShown += g.n;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="name">'+j.c+(g.n>1?' ('+g.n+' jobs)':'')+'</td>'+
+        '<td>'+j.a+'</td>'+
+        '<td><span class="pill" style="background:'+(j.st==='Done'?'#4f7fa8':'#1b7f4b')+'">'+j.st+'</span></td>'+
+        '<td class="addr-cell">'+fmtDate(g.last)+'</td>'+
+        '<td><span class="pill" style="background:'+cityColour(j.city)+'">'+
+          j.city.replace(' City','').replace('Outside Greater Sydney','Outside GS')+'</span></td>'+
+        '<td class="mins" style="color:'+col+';font-weight:600">~'+mins+'&nbsp;min</td>'+
+        '<td class="addr-cell">'+j.ls+' &middot; '+j.d.toFixed(1)+' km</td>';
+      jobBody.appendChild(tr);
+    });
+    jobCount.textContent = rows.length+' locations · '+jobsShown+' jobs';
+  }
+
+  function renderKeyTable(list){
+    var tally = {};
+    list.forEach(function(j){
+      var t = tally[j.ls] || (tally[j.ls] = {open:0, done:0});
+      if(j.st==='Open') t.open++; else t.done++;
+    });
+    var byName = {};
+    points.forEach(function(p){ if(!byName[p.n]) byName[p.n] = p; });
+    var rows = Object.keys(tally).map(function(n){
+      return {n:n, p:byName[n], t:tally[n]};
+    }).sort(function(a,b){ return (b.t.open+b.t.done) - (a.t.open+a.t.done); });
+    keyBody.innerHTML = '';
+    rows.forEach(function(r, i){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="count">'+(i+1)+'</td><td class="name">'+r.n+'</td>'+
+        '<td class="addr-cell">'+(r.p ? r.p.addr.replace(', Australia','') : '')+'</td>'+
+        '<td class="count">'+r.t.open+'</td><td class="count">'+r.t.done+'</td>';
+      keyBody.appendChild(tr);
+    });
+    document.getElementById('keyCount').textContent = rows.length+' of '+points.length+' locksmiths nearest to a job';
+  }
+
+  /* ---------- the filter ---------- */
+  var fromInput = document.getElementById('dateFrom'),
+      toInput = document.getElementById('dateTo'),
+      rangeLabel = document.getElementById('rangeLabel'),
+      headRange = document.getElementById('headRange');
+  fromInput.min = toInput.min = DMIN; fromInput.max = toInput.max = DMAX;
+  fromInput.value = DMIN; toInput.value = DMAX;
+
+  function apply(fit){
+    filter.from = fromInput.value || DMIN;
+    filter.to   = toInput.value   || DMAX;
+    var list = currentJobs();
+    var bounds = rebuildJobLayers(list);
+    var stats = cityStats(list);
+    renderCities(stats);
+    renderJobTable(list);
+    renderKeyTable(list);
+    var opens = list.filter(function(j){return j.st==='Open';}).length;
+    var txt = fmtDate(filter.from)+' – '+fmtDate(filter.to)+' · '+
+              opens+' open work orders · '+(list.length-opens)+' completed jobs';
+    rangeLabel.textContent = txt;
+    headRange.textContent = 'NSW jobs only · 126 locksmith businesses · '+txt;
+    if(fit && bounds.length) map.fitBounds(bounds, {padding:[30,30]});
+    return bounds;
+  }
+  function setRange(days){
+    fromInput.value = days ? shiftDays(DMAX, -days+1) : DMIN;
+    toInput.value = DMAX;
+    apply(false);
+  }
+  document.getElementById('preset30').addEventListener('click', function(){ setRange(30); });
+  document.getElementById('preset60').addEventListener('click', function(){ setRange(60); });
+  document.getElementById('preset90').addEventListener('click', function(){ setRange(90); });
+  document.getElementById('presetAll').addEventListener('click', function(){ setRange(0); });
+  fromInput.addEventListener('change', function(){ apply(false); });
+  toInput.addEventListener('change', function(){ apply(false); });
+  jobStatus.addEventListener('change', function(){ renderJobTable(currentJobs()); });
+  jobSearch.addEventListener('input', function(){ renderJobTable(currentJobs()); });
+
+  /* ---------- layer toggles + view buttons ---------- */
+  function bindToggle(id, on, off){
+    document.getElementById(id).addEventListener('change', function(e){ e.target.checked ? on() : off(); });
+  }
+  bindToggle('tHeat', function(){ heatLayer && map.addLayer(heatLayer); }, function(){ heatLayer && map.removeLayer(heatLayer); });
+  bindToggle('tLs',   function(){ map.addLayer(lsGroup); },   function(){ map.removeLayer(lsGroup); });
+  bindToggle('tWo',   function(){ map.addLayer(openGroup); }, function(){ map.removeLayer(openGroup); });
+  bindToggle('tDone', function(){ map.addLayer(doneGroup); }, function(){ map.removeLayer(doneGroup); });
+  bindToggle('tLine', function(){ map.addLayer(openLines); }, function(){ map.removeLayer(openLines); });
+  bindToggle('tDoneLine', function(){ map.addLayer(doneLines); }, function(){ map.removeLayer(doneLines); });
+  bindToggle('tZone', function(){ map.addLayer(zoneGroup); map.addLayer(badgeGroup); },
+                      function(){ map.removeLayer(zoneGroup); map.removeLayer(badgeGroup); });
+
+  var labelsOn = true;
+  function syncLabels(){
+    var show = labelsOn && map.getZoom() >= 11;
+    document.getElementById('mapFrame').classList.toggle('hide-labels', !show);
+    document.getElementById('labelHint').textContent = labelsOn && !show ? '(zoom in for pin labels)' : '';
+  }
+  document.getElementById('tLabel').addEventListener('change', function(e){ labelsOn = e.target.checked; syncLabels(); });
+  map.on('zoomend', syncLabels);
+
+  var SYD = [[-34.20,150.52],[-33.52,151.36]];
+  document.getElementById('btnSyd').addEventListener('click', function(){ map.fitBounds(SYD, {padding:[10,10]}); });
+  document.getElementById('btnAll').addEventListener('click', function(){
+    var b = currentJobs().map(function(j){ return [j.lat,j.lng]; });
+    if(b.length) map.fitBounds(b, {padding:[30,30]});
+  });
+
+  /* ---------- NSW inset ---------- */
+  var svg = document.getElementById('insetSvg'), ns = 'http://www.w3.org/2000/svg';
+  svg.setAttribute('viewBox','178 113 108 108');
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var path = document.createElementNS(ns,'path');
+  path.setAttribute('d', D.nswPath);
+  path.setAttribute('fill','#dfe6ec'); path.setAttribute('stroke','#8fa2b4'); path.setAttribute('stroke-width','1.2');
+  svg.appendChild(path);
+  var box = document.createElementNS(ns,'rect');
+  box.setAttribute('x', D.sydUnit[0]-9); box.setAttribute('y', D.sydUnit[1]-7);
+  box.setAttribute('width',18); box.setAttribute('height',14);
+  box.setAttribute('fill','none'); box.setAttribute('stroke','#cf4034'); box.setAttribute('stroke-width','2');
+  svg.appendChild(box);
+  var dot = document.createElementNS(ns,'circle');
+  dot.setAttribute('cx', D.sydUnit[0]); dot.setAttribute('cy', D.sydUnit[1]); dot.setAttribute('r','2.4');
+  dot.setAttribute('fill','#16212e'); svg.appendChild(dot);
+  var tx = document.createElementNS(ns,'text');
+  tx.setAttribute('x', D.sydUnit[0]+11); tx.setAttribute('y', D.sydUnit[1]+3);
+  tx.setAttribute('font-size','7'); tx.setAttribute('font-family','Inter,sans-serif'); tx.setAttribute('fill','#16212e');
+  tx.textContent = 'Sydney'; svg.appendChild(tx);
+
+  /* ---------- region table + full locksmith list ---------- */
+  var rt = document.getElementById('regionTable');
+  regionRows.forEach(function(r){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="name">'+r.region+'</td><td class="count">'+r.count+'</td>';
+    rt.appendChild(tr);
+  });
+  var listBody = document.getElementById('fullListBody'),
+      searchInput = document.getElementById('listSearch'),
+      regionSelect = document.getElementById('listRegionFilter'),
+      listCount = document.getElementById('listCount');
+  regionRows.forEach(function(r){
+    var o = document.createElement('option'); o.value = r.region; o.textContent = r.region; regionSelect.appendChild(o);
+  });
+  function renderList(){
+    var q = searchInput.value.trim().toLowerCase(), region = regionSelect.value, shown = 0;
+    listBody.innerHTML = '';
+    points.forEach(function(p){
+      if(region && p.r !== region) return;
+      if(q && p.n.toLowerCase().indexOf(q)<0 && p.a.toLowerCase().indexOf(q)<0) return;
+      shown++;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="name">'+p.n+'</td><td>'+p.a+'</td>'+
+                     '<td class="addr-cell">'+p.r+'</td>'+
+                     '<td class="addr-cell">'+p.addr.replace(', Australia','')+'</td>';
+      listBody.appendChild(tr);
+    });
+    listCount.textContent = shown+' of '+points.length+' shown';
+  }
+  searchInput.addEventListener('input', renderList);
+  regionSelect.addEventListener('change', renderList);
+  renderList();
+
+  /* ---------- go ---------- */
+  function start(){
+    renderList();                 // the locksmith list needs the rows Supabase just returned
+    map.fitBounds(SYD, {padding:[10,10]});
+    apply(false);
+    syncLabels();
+  }
+
+  var loaded = 0, failed = false;
+  function loadError(e){
+    if(failed) return; failed = true;
+    document.getElementById('loadMsg').innerHTML =
+      'Could not load data from Supabase (' + (e && e.message ? e.message : 'network error') + '). ' +
+      'The page itself is fine \u2014 check the connection, or that the locksmith_businesses and ' +
+      'locksmith_jobs tables exist and their read policy allows anon.';
+    document.getElementById('loadMsg').className = 'load-msg bad';
+  }
+  function maybeStart(){
+    if(++loaded < 2 || failed) return;
+    var el = document.getElementById('loadMsg');
+    el.textContent = points.length + ' locksmiths \u00b7 ' + jobs.length + ' NSW jobs loaded from Supabase';
+    el.className = 'load-msg ok';
+    setTimeout(function(){ el.style.display = 'none'; }, 4000);
+    start();
+  }
+
+  sbFetch('locksmith_businesses', function(err, rows){
+    if(err) return loadError(err);
+    points = (rows||[]).filter(function(r){ return r.lat && r.lng && r.is_active !== false; })
+      .map(function(r){ return {n:r.name, a:r.suburb||'', r:r.region||'', addr:r.address||'',
+                                lat:+r.lat, lng:+r.lng, label:false}; });
+    var served = {};
+    points.forEach(function(p){ served[p.n] = 0; });
+    maybeStartWhenJobsIn();
+  });
+
+  var jobRows = null, lsIn = false;
+  function maybeStartWhenJobsIn(){ lsIn = true; if(jobRows) finish(); else maybeStart(); }
+  function finish(){
+    jobs = jobRows.map(function(j){ return attachNearest(j); });
+    /* label the locksmiths nearest to the most jobs, as the offline build did */
+    var tally = {};
+    jobs.forEach(function(j){ tally[j.ls] = (tally[j.ls]||0)+1; });
+    var top = Object.keys(tally).sort(function(a,b){ return tally[b]-tally[a]; }).slice(0,10);
+    var seen = {};
+    points.forEach(function(p){
+      p.label = top.indexOf(p.n) > -1 && !seen[p.n];
+      if(p.label) seen[p.n] = 1;
+    });
+    maybeStart();
+  }
+
+  sbFetch('locksmith_jobs', function(err, rows){
+    if(err) return loadError(err);
+    jobRows = (rows||[])
+      .filter(function(r){ return r.lat && r.lng && r.job_date &&
+                                  (r.status === 'Work Order' || r.status === 'Completed'); })
+      .map(function(r){
+        return {c:r.customer||'(no name)', a:r.suburb||'', lat:+r.lat, lng:+r.lng,
+                st:(r.status === 'Work Order' ? 'Open' : 'Done'), dt:String(r.job_date).slice(0,10),
+                city:cityOf(+r.lat, +r.lng)};
+      });
+    var dates = jobRows.map(function(j){ return j.dt; }).sort();
+    if(dates.length){
+      DMIN = dates[0]; DMAX = dates[dates.length-1];
+      fromInput.min = toInput.min = DMIN; fromInput.max = toInput.max = DMAX;
+      fromInput.value = DMIN; toInput.value = DMAX;
+    }
+    if(lsIn) finish(); else { jobRows = jobRows; }
+  });
 })();
 </script>
 </body>
