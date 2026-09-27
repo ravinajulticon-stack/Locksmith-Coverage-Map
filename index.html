@@ -305,7 +305,7 @@
 <div class="layout">
   <div class="panel">
     <h2>Full Locksmith List</h2>
-    <div class="panel-sub">All 126 businesses &mdash; search by name/suburb or filter by region</div>
+    <div class="panel-sub" id="allSub">All businesses &mdash; search by name/suburb or filter by region</div>
     <div class="list-controls">
       <input type="search" id="listSearch" placeholder="Search name or suburb&hellip;">
       <select id="listRegionFilter"><option value="">All Regions</option></select>
@@ -334,8 +334,8 @@
 <details class="note">
   <summary>How to Read This</summary>
   <div class="note-body">
-  This is <b>not</b> the official NSW licensing register &mdash; NSW does not publish a bulk-downloadable list of licensed locksmiths (Service NSW / NSW Fair Trading only offer a one-at-a-time licence check). The 126 locksmiths plotted here are <b>businesses currently listed on Google</b>, gathered from 30 targeted area searches on 18&nbsp;Sep&nbsp;2026 and de-duplicated. A locksmith can hold a NSW licence without a Google listing, and mobile-only operators may show an approximate service address.<br><br>
-  <b>Scope: NSW jobs only.</b> The job export covers all states &mdash; 1,443 jobs, of which 617 are in NSW, 561 in VIC, 108 in QLD and the rest spread across SA, ACT, WA and TAS. Only the NSW ones are plotted here, because the 126 locksmiths mapped were gathered from NSW searches, so a nearest-locksmith distance can only be calculated honestly for NSW jobs. The export covers <b>4 Jan 2026 to 21 Sep 2026</b>, and the date filter above the map applies to both job layers, the city cards and both tables. Note the two layers naturally cover different windows: completed jobs accumulate across the whole nine months, while 30 of the 38 open work orders are dated August or September, since older ones have since been closed out — so narrow the range to compare like with like. Within NSW, two layers are shown: the 38 <b>open work orders</b> (Job Status = &ldquo;Work Order&rdquo;, green) and the 412 <b>completed jobs</b> (Job Status = &ldquo;Completed&rdquo;, blue, at 387 distinct addresses since some repeat). The 167 NSW jobs marked &ldquo;Unsuccessful&rdquo; are not plotted. Both layers are geocoded to suburb/postcode centroids rather than exact street addresses, so treat each pin as accurate to roughly a kilometre. Each job is joined to its nearest mapped locksmith; the <b>drive time is an estimate</b> from straight-line distance (about 30km/h for the first 15km, 70km/h beyond), not a routed trip, so check real directions before committing to a call-out window.<br><br>
+  This is <b>not</b> the official NSW licensing register &mdash; NSW does not publish a bulk-downloadable list of licensed locksmiths (Service NSW / NSW Fair Trading only offer a one-at-a-time licence check). The locksmiths plotted here are <b>businesses currently listed on Google</b>, gathered from area searches across every Greater Sydney LGA and the main regional centres, most recently on 27&nbsp;Sep&nbsp;2026, and de-duplicated. A locksmith can hold a NSW licence without a Google listing, and mobile-only operators may show an approximate service address.<br><br>
+  <b>Scope: NSW jobs only.</b> The job export covers all states &mdash; 1,443 jobs, of which 617 are in NSW, 561 in VIC, 108 in QLD and the rest spread across SA, ACT, WA and TAS. Only the NSW ones are plotted here, because the locksmiths mapped were gathered from NSW searches, so a nearest-locksmith distance can only be calculated honestly for NSW jobs. The export covers <b>4 Jan 2026 to 21 Sep 2026</b>, and the date filter above the map applies to both job layers, the city cards and both tables. Note the two layers naturally cover different windows: completed jobs accumulate across the whole nine months, while 30 of the 38 open work orders are dated August or September, since older ones have since been closed out — so narrow the range to compare like with like. Within NSW, two layers are shown: the 38 <b>open work orders</b> (Job Status = &ldquo;Work Order&rdquo;, green) and the 412 <b>completed jobs</b> (Job Status = &ldquo;Completed&rdquo;, blue, at 387 distinct addresses since some repeat). The 167 NSW jobs marked &ldquo;Unsuccessful&rdquo; are not plotted. Both layers are geocoded to suburb/postcode centroids rather than exact street addresses, so treat each pin as accurate to roughly a kilometre. Each job is joined to its nearest mapped locksmith; the <b>drive time is an estimate</b> from straight-line distance (about 30km/h for the first 15km, 70km/h beyond), not a routed trip, so check real directions before committing to a call-out window.<br><br>
   The <b>Three Cities</b> zones follow the Greater Sydney Commission's Eastern Harbour / Central River / Western Parkland framing, but are drawn as indicative bands here rather than official LGA boundaries. The street basemap loads live when you open this file, so you need an internet connection to see it &mdash; all pins, tables and figures work without one. The map ships with a <b>built-in basemap</b> &mdash; the NSW outline plus suburb and town names, all held inside this file &mdash; so it always draws something, with no tile server, no API key and no internet connection. On opening, it also tests three free <b>street map</b> sources and switches to the first that genuinely works; you can pick one yourself from the layers button at the top-left. The test compares two tiles from far-apart places, because a blocked or key-gated tile still arrives as a valid image &mdash; that is why an earlier version filled the map with &ldquo;Access Blocked&rdquo; squares. If a source fails the test the map falls straight back to the built-in one and says why. Street tiles generally need this page served from a web address rather than opened off your computer; the <b>Street Tiles</b> button accepts a free MapTiler key if you want them to work locally, stored only in your own browser. Suburb names come from the Australian postcode dataset, placed at locality centroids; the state outline shows only when zoomed out, as it is not detailed enough to pass for a coastline up close. Place data &copy; OpenStreetMap contributors.
   </div>
 </details>
@@ -849,7 +849,7 @@
     var txt = fmtDate(filter.from)+' – '+fmtDate(filter.to)+' · '+
               opens+' open work orders · '+(list.length-opens)+' completed jobs';
     rangeLabel.textContent = txt;
-    headRange.textContent = 'NSW jobs only · 126 locksmith businesses · '+txt;
+    headRange.textContent = 'NSW jobs only \u00b7 '+points.length+' locksmith businesses \u00b7 '+txt;
     if(fit && bounds.length) map.fitBounds(bounds, {padding:[30,30]});
     return bounds;
   }
@@ -952,6 +952,8 @@
 
   /* ---------- go ---------- */
   function start(){
+    var sub = document.getElementById('allSub');
+    if(sub) sub.innerHTML = 'All '+points.length+' businesses &mdash; search by name/suburb or filter by region';
     drawLocksmiths();             // pins + density need the rows Supabase just returned
     renderList();                 // the locksmith list needs the rows Supabase just returned
     map.fitBounds(SYD, {padding:[10,10]});
