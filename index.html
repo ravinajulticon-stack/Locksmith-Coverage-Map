@@ -156,6 +156,8 @@
   .toolbar button{padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
                    color:var(--ink); font-family:'Inter',sans-serif; font-size:.78rem; font-weight:600; cursor:pointer;}
   .toolbar button:hover{background:var(--surface-2);}
+  .open24{color:#7fd4a0; font-weight:600; font-size:.72rem; letter-spacing:.3px;}
+  .leaflet-popup-content a{color:#8ec5ff;}
 
   /* ------------------------------------------------------------ sign-in gate */
   #gate{position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
@@ -293,7 +295,7 @@
     <div class="list-count" id="keyCount"></div>
     <div class="list-scroll">
       <table>
-        <thead><tr><th class="count">#</th><th>Business</th><th>Address</th><th class="count">Open</th><th class="count">Done</th></tr></thead>
+        <thead><tr><th class="count">#</th><th>Business</th><th>Address</th><th>Phone</th><th class="count">Open</th><th class="count">Done</th></tr></thead>
         <tbody id="keyBody"></tbody>
       </table>
     </div>
@@ -687,7 +689,18 @@
     return '<b>'+j.c+'</b>'+j.a+' &middot; '+j.city+'<br>'+
            (j.st==='Open' ? 'Open work order' : 'Completed job')+' &middot; '+when+
            '<br><span style="color:'+col+';font-weight:600">~'+mins+' min</span> ('+
-           j.d.toFixed(1)+' km) to '+j.ls;
+           j.d.toFixed(1)+' km) to '+j.ls + lsContact(j.ls);
+  }
+
+  /* the popup is where someone decides who to ring, so put the number in it */
+  function lsContact(name){
+    var p = null;
+    for(var i=0;i<points.length;i++){ if(points[i].n === name){ p = points[i]; break; } }
+    if(!p) return '';
+    var out = '';
+    if(p.ph) out += '<br><a href="tel:'+p.ph.replace(/\s/g,'')+'">'+p.ph+'</a>';
+    if(p.open24) out += (out ? ' &middot; ' : '<br>') + '<span class="open24">Open 24 Hours</span>';
+    return out;
   }
 
   function rebuildJobLayers(list){
@@ -804,8 +817,11 @@
     keyBody.innerHTML = '';
     rows.forEach(function(r, i){
       var tr = document.createElement('tr');
+      var ph = r.p && r.p.ph ? '<a href="tel:'+r.p.ph.replace(/\s/g,'')+'">'+r.p.ph+'</a>' : '';
+      if(r.p && r.p.open24) ph += (ph ? ' ' : '') + '<span class="open24">24h</span>';
       tr.innerHTML = '<td class="count">'+(i+1)+'</td><td class="name">'+r.n+'</td>'+
         '<td class="addr-cell">'+(r.p ? r.p.addr.replace(', Australia','') : '')+'</td>'+
+        '<td class="addr-cell">'+ph+'</td>'+
         '<td class="count">'+r.t.open+'</td><td class="count">'+r.t.done+'</td>';
       keyBody.appendChild(tr);
     });
@@ -968,6 +984,7 @@
     if(err) return loadError(err);
     points = (rows||[]).filter(function(r){ return r.lat && r.lng && r.is_active !== false; })
       .map(function(r){ return {n:r.name, a:r.suburb||'', r:r.region||'', addr:r.address||'',
+                                ph:r.phone||'', open24:!!r.open_24,
                                 lat:+r.lat, lng:+r.lng, label:false}; });
     var served = {};
     points.forEach(function(p){ served[p.n] = 0; });
