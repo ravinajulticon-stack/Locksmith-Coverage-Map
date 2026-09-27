@@ -349,11 +349,24 @@
 
   var SB_TOKEN = null;            /* set once the viewer has signed in */
 
-  function sbFetch(table, cb){
+  var SB_REFRESH = null;          /* lets an expired access token be renewed */
+
+  function sbFetch(table, cb, retried){
     var url = SB_URL + '/rest/v1/' + table + '?select=*&limit=5000';
     fetch(url, {headers:{apikey:SB_KEY, Authorization:'Bearer '+(SB_TOKEN || SB_KEY)}})
-      .then(function(r){ if(!r.ok) throw new Error(table+' '+r.status); return r.json(); })
-      .then(function(rows){ cb(null, rows); })
+      .then(function(r){
+        /* an access token lasts an hour; renew it once rather than failing */
+        if((r.status === 401 || r.status === 403) && !retried){
+          refreshSession(function(ok){
+            if(ok) sbFetch(table, cb, true);
+            else cb(new Error('SESSION_EXPIRED'));
+          });
+          return null;
+        }
+        if(!r.ok) throw new Error(table+' '+r.status);
+        return r.json();
+      })
+      .then(function(rows){ if(rows) cb(null, rows); })
       .catch(function(e){ cb(e); });
   }
 
@@ -933,10 +946,10 @@
   var loaded = 0, failed = false;
   function loadError(e){
     if(failed) return; failed = true;
+    if(e && e.message === 'SESSION_EXPIRED'){ sessionExpired(); return; }
     document.getElementById('loadMsg').innerHTML =
       'Could not load data from Supabase (' + (e && e.message ? e.message : 'network error') + '). ' +
-      'The page itself is fine \u2014 check the connection, or that the locksmith_businesses and ' +
-      'locksmith_jobs tables exist and their read policy allows anon.';
+      'The map itself is fine \u2014 check the connection, then reload the page.';
     document.getElementById('loadMsg').className = 'load-msg bad';
   }
   function maybeStart(){
@@ -1005,13 +1018,51 @@
       gErr  = document.getElementById('gErr'),
       STORE = 'ddl_lsmap_session';
 
+  (function(){ var el = document.getElementById('loadMsg'); if(el) el.style.display = 'none'; })();
+
   function store(v){ try{ v ? localStorage.setItem(STORE, v) : localStorage.removeItem(STORE); }catch(e){} }
-  function stored(){ try{ return localStorage.getItem(STORE); }catch(e){ return null; } }
+
+  function saveSession(j){
+    SB_TOKEN = j.access_token;
+    if(j.refresh_token) SB_REFRESH = j.refresh_token;
+    store(JSON.stringify({a: SB_TOKEN, r: SB_REFRESH}));
+  }
+  function loadSession(){
+    try{
+      var v = localStorage.getItem(STORE);
+      if(!v) return null;
+      if(v.charAt(0) !== '{') return {a: v, r: null};   /* saved by an earlier version */
+      return JSON.parse(v);
+    }catch(e){ return null; }
+  }
+
+  function refreshSession(cb){
+    if(!SB_REFRESH) return cb(false);
+    fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: {apikey: SB_KEY, 'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: SB_REFRESH})
+    })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){ if(j && j.access_token){ saveSession(j); cb(true); } else cb(false); })
+    .catch(function(){ cb(false); });
+  }
+
+  /* Say so plainly instead of leaving the viewer on a blank map. */
+  function sessionExpired(){
+    SB_TOKEN = null; SB_REFRESH = null; store(null);
+    var el = document.getElementById('loadMsg');
+    if(el){ el.style.display = 'none'; }
+    gate.style.display = '';
+    gErr.textContent = 'Your session expired. Please sign in again.';
+    gBtn.disabled = false; gBtn.textContent = 'Sign In';
+  }
 
   function openMap(token){
     SB_TOKEN = token;
-    store(token);
     gate.style.display = 'none';
+    var el = document.getElementById('loadMsg');
+    if(el){ el.style.display = ''; }
     loadData();
   }
 
@@ -1032,7 +1083,7 @@
     })
     .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
     .then(function(res){
-      if(res.ok && res.j.access_token){ openMap(res.j.access_token); return; }
+      if(res.ok && res.j.access_token){ saveSession(res.j); openMap(res.j.access_token); return; }
       gErr.textContent = (res.j && (res.j.error_description || res.j.msg || res.j.message))
                          || 'Sign-in failed. Check the email and password.';
       gBtn.disabled = false; gBtn.textContent = 'Sign In';
@@ -1047,10 +1098,14 @@
   document.getElementById('btnOut').addEventListener('click', signOut);
 
   (function resume(){
-    var t = stored();
-    if(!t) return;
-    fetch(SB_URL + '/auth/v1/user', {headers:{apikey: SB_KEY, Authorization:'Bearer '+t}})
-      .then(function(r){ if(r.ok) openMap(t); else store(null); })
+    var sess = loadSession();
+    if(!sess || !sess.a) return;
+    SB_REFRESH = sess.r;
+    fetch(SB_URL + '/auth/v1/user', {headers:{apikey: SB_KEY, Authorization:'Bearer '+sess.a}})
+      .then(function(r){
+        if(r.ok){ SB_TOKEN = sess.a; openMap(sess.a); return; }
+        refreshSession(function(ok){ if(ok) openMap(SB_TOKEN); else sessionExpired(); });
+      })
       .catch(function(){});
   })();
 })();
