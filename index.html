@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DDL Locksmith Coverage Map</title>
+<script>
+  /* Applied before the page paints, so a saved Light choice does not flash dark first. */
+  try {
+    var t = localStorage.getItem('ddl_lsmap_theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -13,12 +20,20 @@
     --good:#2e9e5b; --mid:#e0a32e; --bad:#cf4034; --cust:#1b7f4b;
     --shadow:0 1px 2px rgba(16,33,46,.08), 0 10px 26px -14px rgba(16,33,46,.35);
   }
+  /* Dark follows the viewer's system setting unless they pick a side with the Theme
+     button, which is why the same page looked light in previews and dark on a Mac
+     set to dark. The [data-theme] attribute wins either way. */
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
       --bg:#10161d; --surface:#18212b; --surface-2:#1f2932; --ink:#eaf0f6; --muted:#9fb0c0;
       --line:#2b3947; --navy:#0f2a45;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -16px rgba(0,0,0,.8);
     }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10161d; --surface:#18212b; --surface-2:#1f2932; --ink:#eaf0f6; --muted:#9fb0c0;
+    --line:#2b3947; --navy:#0f2a45;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -16px rgba(0,0,0,.8);
   }
   *{box-sizing:border-box;}
   body{margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; padding:22px 26px 56px;}
@@ -314,6 +329,7 @@
   <button type="button" id="btnKey">Street Tiles…</button>
   <button type="button" id="btnSyd" style="margin-left:auto">Home View</button>
   <button type="button" id="btnAll">Fit All Jobs</button>
+  <button type="button" id="btnTheme" title="Light, dark, or follow your computer's setting">Theme: System</button>
   <button type="button" id="btnOut">Sign Out</button>
 </div>
 
@@ -1166,6 +1182,32 @@
     var b = currentJobs().map(function(j){ return [j.lat,j.lng]; });
     if(b.length) map.fitBounds(b, {padding:[30,30]});
   });
+
+  /* ---------- theme ----------
+     Cycles System -> Light -> Dark. The choice is this browser's only: it is a viewing
+     preference, not shared data, so it lives in localStorage and never touches Supabase. */
+  (function(){
+    var btn = document.getElementById('btnTheme');
+    if(!btn) return;
+    var KEY = 'ddl_lsmap_theme', ORDER = ['system','light','dark'];
+    var LABEL = {system:'Theme: System', light:'Theme: Light', dark:'Theme: Dark'};
+    function read(){
+      try { var v = localStorage.getItem(KEY); return ORDER.indexOf(v) > -1 ? v : 'system'; }
+      catch(e){ return 'system'; }          /* private windows can throw on access */
+    }
+    function apply(mode){
+      if(mode === 'system') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', mode);
+      btn.textContent = LABEL[mode];
+      if(typeof map !== 'undefined' && map.invalidateSize) setTimeout(function(){ map.invalidateSize(); }, 60);
+    }
+    apply(read());
+    btn.addEventListener('click', function(){
+      var next = ORDER[(ORDER.indexOf(read()) + 1) % ORDER.length];
+      try { localStorage.setItem(KEY, next); } catch(e){}
+      apply(next);
+    });
+  })();
 
   /* ---------- state locator inset ---------- */
   var ns = 'http://www.w3.org/2000/svg';
