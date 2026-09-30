@@ -97,8 +97,9 @@
   .toolbar label{display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
   .toolbar input{accent-color:var(--navy); width:14px; height:14px; cursor:pointer;}
 
-  .city-row{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0 6px;}
-  @media (max-width:820px){.city-row{grid-template-columns:1fr;}}
+  .city-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(235px,1fr)); gap:12px; margin:0 0 6px;}
+  @media (max-width:560px){.city-row{grid-template-columns:1fr;}}
+  .scope-note{color:var(--muted); font-size:.78rem; margin:8px 0 4px; line-height:1.5;}
   .city-card{background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--cc,#1b3a5c);
              border-radius:11px; padding:13px 15px; box-shadow:var(--shadow);}
   .city-card .cc-name{font-weight:700; font-size:.95rem;}
@@ -156,6 +157,33 @@
   .toolbar button{padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
                    color:var(--ink); font-family:'Inter',sans-serif; font-size:.78rem; font-weight:600; cursor:pointer;}
   .toolbar button:hover{background:var(--surface-2);}
+
+  /* ---- page header + KPI strip: the management half ---- */
+  .page-head{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin:0 0 12px;}
+  .ph-h1{margin:0; font-size:clamp(1.15rem,2.2vw,1.6rem); letter-spacing:-.3px;}
+  .ph-sub{color:var(--muted); font-size:.82rem; margin-top:2px;}
+  .page-head .state-switch{margin-left:auto;}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:0 0 14px;}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px;}
+  .kpi .v{font-size:1.5rem; font-weight:700; line-height:1.15; letter-spacing:-.5px;}
+  .kpi .k{color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; margin-top:3px;}
+  .kpi .note{font-size:.72rem; color:var(--muted); margin-top:4px;}
+  .kpi.warn{border-color:#7a4a2a;}
+  .kpi.warn .v{color:#e0a32e;}
+  .kpi.bad{border-color:#7a3030;}
+  .kpi.bad .v{color:#e08585;}
+
+  .loading-veil{position:absolute; inset:0; z-index:700; display:flex; flex-direction:column;
+                align-items:center; justify-content:center; gap:12px; background:rgba(16,22,29,.82);
+                color:var(--ink); font-size:.86rem; letter-spacing:.2px;}
+  .loading-veil .spin{width:26px; height:26px; border:3px solid rgba(255,255,255,.18);
+                      border-top-color:#1b7f4b; border-radius:50%; animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-veil .sub{color:var(--muted); font-size:.75rem;}
+
+  .section-head{font-size:.72rem; text-transform:uppercase; letter-spacing:.9px; color:var(--muted);
+                margin:20px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--line);}
   .state-switch{display:inline-flex; gap:0; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
   .state-switch .st-btn{border:0; border-radius:0; padding:6px 16px; font-weight:700; letter-spacing:.4px;}
   .state-switch .st-btn.on{background:#1b7f4b; color:#fff;}
@@ -204,8 +232,30 @@
 
 <div class="load-msg" id="loadMsg">Loading locksmiths and jobs from Supabase…</div>
 
+<div class="page-head">
+  <div class="ph-title">
+    <h1 class="ph-h1">DDL &ndash; Locksmith Coverage</h1>
+    <div class="ph-sub" id="phSub">Where DDL jobs sit relative to the locksmith network</div>
+  </div>
+  <span class="state-switch" id="stateSwitch">
+    <button type="button" class="st-btn on" data-state="NSW">NSW</button>
+    <button type="button" class="st-btn" data-state="VIC">VIC</button>
+    <button type="button" class="st-btn" data-state="QLD">QLD</button>
+    <button type="button" class="st-btn" data-state="SA">SA</button>
+    <button type="button" class="st-btn" data-state="ACT">ACT</button>
+    <button type="button" class="st-btn" data-state="TAS">TAS</button>
+  </span>
+</div>
+
+<div class="kpi-row" id="kpiRow"></div>
+
 <div id="mapFrame">
   <div id="leafletMap"></div>
+  <div class="loading-veil" id="veil" style="display:none">
+    <div class="spin"></div>
+    <div id="veilMsg">Loading locksmiths and jobs&hellip;</div>
+    <div class="sub">458 locksmiths and 889 jobs &mdash; a few seconds</div>
+  </div>
 
   <div class="ov title-banner">
     <h1>DDL &ndash; Locksmith Coverage</h1>
@@ -216,26 +266,24 @@
 
   <div class="ov interactive side-stack">
     <div class="card">
-      <h4>Drive Time to Nearest Locksmith</h4>
+      <h4>Drive Time To Nearest Locksmith</h4>
       <div class="ramp"></div>
       <div class="ramp-labels"><span>~5 min</span><span>~20 min</span><span>60 min+</span></div>
       <div class="key-row" style="margin-top:7px;"><span class="sw round" style="background:#b3261e"></span> Locksmith Business</div>
       <div class="key-row"><span class="sw round" style="background:#1b7f4b"></span> Open DDL Work Order</div>
       <div class="key-row"><span class="sw round" style="background:#4f7fa8"></span> Completed DDL Job</div>
       <div class="key-row"><span class="sw lineswatch solid" style="width:15px"></span> Work Order &rarr; Nearest Locksmith</div>
-      <div class="key-row"><span class="sw" style="background:rgba(31,111,178,.25); border-color:#1f6fb2"></span> Eastern Harbour City</div>
-      <div class="key-row"><span class="sw" style="background:rgba(210,105,30,.25); border-color:#d2691e"></span> Central River City</div>
-      <div class="key-row"><span class="sw" style="background:rgba(46,125,79,.25); border-color:#2e7d4f"></span> Western Parkland City</div>
+      <div id="legendRegions"></div>
     </div>
     <div class="card" id="insetBox">
       <h4>Location</h4>
       <svg id="insetSvg" aria-label="New South Wales locator"></svg>
-      <div class="inset-cap">New South Wales</div>
+      <div class="inset-cap" id="insetCap">New South Wales</div>
     </div>
   </div>
 
   <div class="ov footer-banner">
-    <div class="t">DDL Group &middot; NSW Locksmith Network</div>
+    <div class="t" id="footTitle">DDL Group &middot; NSW Locksmith Network</div>
     <div class="s" id="headRange">NSW jobs only</div>
   </div>
 
@@ -261,25 +309,23 @@
   <label><input type="checkbox" id="tDone" checked> Completed Jobs</label>
   <label><input type="checkbox" id="tLine" checked> Work Order Lines</label>
   <label><input type="checkbox" id="tDoneLine"> Completed Job Lines</label>
-  <label><input type="checkbox" id="tZone" checked> Three Cities Zones</label>
+  <label><input type="checkbox" id="tZone" checked><span id="zoneLabel"> Three Cities Zones</span></label>
   <label><input type="checkbox" id="tLabel" checked> Pin Labels</label><span id="labelHint" style="font-size:.74rem; color:var(--muted);"></span>
   <button type="button" id="btnKey">Street Tiles…</button>
-  <span class="state-switch" id="stateSwitch">
-    <button type="button" class="st-btn on" data-state="NSW">NSW</button>
-    <button type="button" class="st-btn" data-state="VIC">VIC</button>
-  </span>
   <button type="button" id="btnSyd" style="margin-left:auto">Home View</button>
   <button type="button" id="btnAll">Fit All Jobs</button>
   <button type="button" id="btnOut">Sign Out</button>
 </div>
 
+<div class="section-head">Coverage By Region</div>
 <div class="city-row" id="cityRow"></div>
-<div style="color:var(--muted); font-size:.78rem; margin-bottom:4px;">Covers <b>all NSW jobs</b>, not only Sydney &mdash; the map simply opens framed on Greater Sydney, where most of them sit. 2 open work orders and 31 completed jobs fall outside Greater Sydney (Googong, Moss Vale, the Hunter, Central Coast and further); zoom out or press Fit All Jobs to see them. Three Cities zones are indicative bands drawn to match the Greater Sydney Commission's framing &mdash; they are not the official LGA boundaries.</div>
+<div class="scope-note" id="scopeNote"></div>
 
+<div class="section-head">Jobs And Locksmiths</div>
 <div class="layout">
   <div class="panel">
     <h2>DDL Jobs, Worst Coverage First</h2>
-    <div class="panel-sub">Every NSW job in the selected date range, with the estimated drive time from the nearest mapped locksmith</div>
+    <div class="panel-sub" id="jobsSub">Every job in the selected date range, with the estimated drive time from the nearest mapped locksmith</div>
     <div class="list-controls">
       <input type="search" id="jobSearch" placeholder="Search customer, suburb or locksmith&hellip;">
       <select id="jobStatus">
@@ -298,7 +344,7 @@
   </div>
 
   <div class="panel">
-    <h2>Key Locations Shown</h2>
+    <h2>Locksmiths Covering Jobs</h2>
     <div class="panel-sub">Locksmiths that are nearest to at least one DDL job in the selected range</div>
     <div class="list-count" id="keyCount"></div>
     <div class="list-scroll">
@@ -310,6 +356,7 @@
   </div>
 </div>
 
+<div class="section-head">Reference</div>
 <div class="layout">
   <div class="panel">
     <h2>Full Locksmith List</h2>
@@ -328,8 +375,8 @@
   </div>
 
   <div class="panel">
-    <h2>By Region</h2>
-    <div class="panel-sub">Listings found, macro-region</div>
+    <h2>Locksmiths By Region</h2>
+    <div class="panel-sub">Listings Found, Macro-Region</div>
     <div class="list-scroll">
       <table>
         <thead><tr><th>Region</th><th class="count">Count</th></tr></thead>
@@ -340,7 +387,7 @@
 </div>
 
 <details class="note">
-  <summary>How to Read This</summary>
+  <summary>How To Read This</summary>
   <div class="note-body">
   This is <b>not</b> the official NSW licensing register &mdash; NSW does not publish a bulk-downloadable list of licensed locksmiths (Service NSW / NSW Fair Trading only offer a one-at-a-time licence check). The locksmiths plotted here are <b>businesses currently listed on Google</b>, gathered from area searches across every Greater Sydney LGA and the main regional centres, most recently on 27&nbsp;Sep&nbsp;2026, and de-duplicated. A locksmith can hold a NSW licence without a Google listing, and mobile-only operators may show an approximate service address.<br><br>
   <b>Scope: NSW jobs only.</b> The job export covers all states &mdash; 1,443 jobs, of which 617 are in NSW, 561 in VIC, 108 in QLD and the rest spread across SA, ACT, WA and TAS. Only the NSW ones are plotted here, because the locksmiths mapped were gathered from NSW searches, so a nearest-locksmith distance can only be calculated honestly for NSW jobs. The export covers <b>4 Jan 2026 to 21 Sep 2026</b>, and the date filter above the map applies to both job layers, the city cards and both tables. Note the two layers naturally cover different windows: completed jobs accumulate across the whole nine months, while 30 of the 38 open work orders are dated August or September, since older ones have since been closed out — so narrow the range to compare like with like. Within NSW, two layers are shown: the 38 <b>open work orders</b> (Job Status = &ldquo;Work Order&rdquo;, green) and the 412 <b>completed jobs</b> (Job Status = &ldquo;Completed&rdquo;, blue, at 387 distinct addresses since some repeat). The 167 NSW jobs marked &ldquo;Unsuccessful&rdquo; are not plotted. Both layers are geocoded to suburb/postcode centroids rather than exact street addresses, so treat each pin as accurate to roughly a kilometre. Each job is joined to its nearest mapped locksmith; the <b>drive time is an estimate</b> from straight-line distance (about 30km/h for the first 15km, 70km/h beyond), not a routed trip, so check real directions before committing to a call-out window.<br><br>
@@ -368,11 +415,114 @@
     {name:'South-Eastern Melbourne',centre:'Dandenong, Frankston', colour:'#d2691e', tag:'Industry and the bay'},
     {name:'Western Melbourne',      centre:'Footscray, Werribee',  colour:'#b3894a', tag:'Fastest-growing corridor'}
   ];
+
+  /* The Melbourne outlines are drawn straight from the same rule vicRegionOf() uses to
+     sort a job, so what you see is the classification itself, not a boundary borrowed
+     from somewhere else. Inner is the 8km core; the rest are 8-70km compass wedges. */
+  function melOffset(km, angDeg){
+    var a = angDeg * Math.PI/180;
+    return [MEL.lat + (km/111.32)*Math.sin(a),
+            MEL.lng + (km/(111.32*Math.cos(MEL.lat*Math.PI/180)))*Math.cos(a)];
+  }
+  function melRing(km){
+    var p = [];
+    for(var a=0; a<=360; a+=6) p.push(melOffset(km, a));
+    return p;
+  }
+  function melWedge(a1, a2){
+    var p = [], a;
+    for(a=a1; a<=a2; a+=3) p.push(melOffset(70, a));
+    p.push(melOffset(70, a2));
+    for(a=a2; a>=a1; a-=3) p.push(melOffset(8, a));
+    p.push(melOffset(8, a1));
+    return p;
+  }
+  (function(){
+    var W = {'Northern Melbourne':[45,135], 'Eastern Melbourne':[-45,45],
+             'South-Eastern Melbourne':[-135,-45], 'Western Melbourne':[135,225]};
+    VIC_REGIONS.forEach(function(r){
+      r.poly = (r.name === 'Inner Melbourne') ? melRing(8) : melWedge(W[r.name][0], W[r.name][1]);
+    });
+  })();
+  var VIC_PATH = "M 253.1625,203.75625 L 252.5375,203.13125 L 252.725,203.13125 L 252.00625,202.475 L 250.2875,202.35 L 242.1,198.2875 L 242.25625,196.94375 L 241.9125,195.85 L 241.19375,194.81875 L 240.63125,193.6 L 240.81875,192.44375 L 239.4125,191.69375 L 238.50625,192.0375 L 237.7875,192.31875 L 237.0375,192.44375 L 235.975,192.7875 L 234.50625,193.19375 L 232.56875,192.725 L 231.50625,192.13125 L 230.63125,192.44375 L 229.975,193.13125 L 228.7875,192.9125 L 227.56875,192.35 L 226.6625,192.475 L 225.225,191.75625 L 223.38125,192.0375 L 222.5375,191.6 L 221.81875,191.69375 L 221.31875,192.35 L 221.56875,193.81875 L 220.25625,194.00625 L 218.63125,193.31875 L 217.35,192.38125 L 216.975,191.1 L 215.00625,189.31875 L 213.38125,188.63125 L 212.25625,188.6 L 210.81875,186.5375 L 210.19375,183.7875 L 209.19375,183.38125 L 207.475,183.25625 L 206.50625,183.0375 L 205.44375,183.56875 L 205.4125,184.5375 L 204.31875,183.56875 L 203.81875,181.5375 L 202.1,180.1 L 199.975,179.85 L 198.225,179.56875 L 197.19375,180.2875 L 195.35,179.4125 L 194.225,179.6 L 194.1625,179.38125 L 194.1625,207.7875 L 194.6,207.81875 L 196.94375,209.725 L 196.94375,210.7875 L 197.6,210.56875 L 198.225,211.00625 L 199.50625,209.50625 L 202.06875,210.7875 L 203.75625,210.35 L 211.63125,214.63125 L 214.85,211.44375 L 217.38125,209.725 L 218.88125,209.725 L 219.31875,208.44375 L 217.81875,208.88125 L 216.975,208.225 L 218.0375,208.225 L 220.7875,206.1 L 222.06875,208.6625 L 220.7875,210.35 L 218.88125,209.94375 L 220.7875,211.63125 L 222.06875,210.7875 L 222.725,211.00625 L 222.9125,209.2875 L 224.4125,209.2875 L 224.85,210.56875 L 224.00625,210.7875 L 223.7875,212.06875 L 225.25625,213.13125 L 226.75625,212.9125 L 226.975,213.35 L 226.35,213.13125 L 227.4125,215.0375 L 228.25625,214.4125 L 229.1,214.85 L 228.88125,214.19375 L 229.75625,215.9125 L 230.81875,216.975 L 231.225,214.19375 L 229.94375,215.0375 L 229.5375,213.35 L 231.6625,213.35 L 234.19375,212.50625 L 238.25625,208.225 L 241.0375,206.5375 L 237.63125,208.00625 L 239.5375,206.75625 L 239.475,206.6625 L 238.9125,206.1 L 240.38125,206.5375 L 242.1,205.88125 L 241.88125,206.31875 L 251.25625,205.475 L 253.1625,203.75625 z ";
+  var MEL_UNIT = [220.31, 207.44];
+
+
+  /* QLD, SA, ACT and TAS are hub states: a region is a named centre with a radius, and a
+     job belongs to the nearest centre that covers it. Sectors would be wrong here - Cairns
+     is 1,400km from Brisbane and is its own market, not a compass direction from the capital. */
+  var HUB_STATES = {
+    QLD: {outside:'Regional Queensland', hubs:[
+      {name:'Brisbane',       lat:-27.4698, lng:153.0251, r:60, colour:'#1f6fb2', centre:'Brisbane CBD',            tag:'The capital and its suburbs'},
+      {name:'Gold Coast',     lat:-28.0167, lng:153.4000, r:45, colour:'#d2691e', centre:'Southport, Robina',        tag:'The coastal strip south'},
+      {name:'Sunshine Coast', lat:-26.6500, lng:153.0667, r:60, colour:'#2e7d4f', centre:'Maroochydore, Caloundra',  tag:'The coast north of Brisbane'}]},
+    SA: {outside:'Regional South Australia', hubs:[
+      {name:'Inner Adelaide',    lat:-34.9285, lng:138.6007, r:10, colour:'#1f6fb2', centre:'Adelaide CBD',        tag:'The city and the ring around it'},
+      {name:'Northern Adelaide', lat:-34.7700, lng:138.6400, r:22, colour:'#2e7d4f', centre:'Salisbury, Elizabeth', tag:'The northern suburbs'},
+      {name:'Eastern & Hills',   lat:-34.9500, lng:138.8000, r:22, colour:'#8a5fb0', centre:'Norwood, Mount Barker',tag:'East of the city and the hills'},
+      {name:'Southern Adelaide', lat:-35.0800, lng:138.5300, r:25, colour:'#b3894a', centre:'Marion, Noarlunga',    tag:'The southern suburbs and coast'}]},
+    ACT: {outside:'Outside Canberra', hubs:[
+      {name:'North Canberra', lat:-35.2400, lng:149.1200, r:18, colour:'#1f6fb2', centre:'Civic, Belconnen, Gungahlin', tag:'North of the lake'},
+      {name:'South Canberra', lat:-35.3800, lng:149.0900, r:18, colour:'#2e7d4f', centre:'Woden, Tuggeranong',          tag:'South of the lake'}]},
+    TAS: {outside:'Regional Tasmania', hubs:[
+      {name:'Hobart',     lat:-42.8821, lng:147.3272, r:40, colour:'#1f6fb2', centre:'Hobart CBD',     tag:'The south and the Derwent'},
+      {name:'Launceston', lat:-41.4332, lng:147.1441, r:40, colour:'#2e7d4f', centre:'Launceston CBD', tag:'The north and the Tamar'}]}
+  };
+  var STATE_PATH = {
+    QLD: "M 204.14,-2.87 L 193.98,12.65 L 197.96,30.49 L 192.65,49.10 L 180.69,51.43 L 174.05,42.51 L 174.05,115.81 L 193.98,115.81 L 193.98,139.08 L 246.80,138.30 L 262.41,139.08 L 277.36,132.87 L 274.37,115.81 L 273.04,110.38 L 264.41,101.07 L 259.09,96.42 L 248.46,88.66 L 240.49,70.04 L 229.19,61.51 L 223.88,44.45 L 223.21,30.49 L 210.59,24.28 L 211.25,11.87 Z",
+    SA: "M 114.25,115.81 L 193.98,115.81 L 193.98,209.27 L 186.01,203.46 L 180.69,192.60 L 178.03,190.27 L 177.70,184.06 L 174.71,177.86 L 172.72,187.56 L 167.40,187.94 L 171.06,177.47 L 166.74,187.56 L 160.09,184.84 L 155.44,182.51 L 148.80,170.88 L 137.50,162.35 L 127.54,158.47 L 114.25,160.02 Z",
+    ACT: "M 245.54,192.75 L 248.06,192.75 L 249.79,189.26 L 248.00,186.62 L 247.07,187.87 L 245.54,190.27 Z",
+    TAS: "M 218.56,229.83 L 227.20,232.16 L 240.49,229.83 L 242.48,233.71 L 242.48,241.46 L 239.82,247.67 L 233.84,252.32 L 227.20,251.55 L 223.88,243.79 L 221.88,236.03 Z",
+  };
+  var STATE_UNIT = {
+    QLD: [273.88, 127.21],
+    SA: [178.04, 185.06],
+    ACT: [248.0, 187.8],
+    TAS: [236.02, 246.75],
+  };
+
+  function hubRegionOf(lat,lng){
+    var cfg = HUB_STATES[STATE];
+    if(!cfg) return null;
+    var best = null, bd = 1e9;
+    for(var i=0;i<cfg.hubs.length;i++){
+      var h = cfg.hubs[i], d = haversine(lat,lng,h.lat,h.lng);
+      if(d <= h.r && d < bd){ bd = d; best = h.name; }
+    }
+    return best || cfg.outside;
+  }
+  /* A hub's circle is exactly the rule above, so drawing it shows the classification
+     rather than an outline borrowed from somewhere else. */
+  function hubRing(h){
+    var p = [];
+    for(var a=0; a<=360; a+=6){
+      var rad = a*Math.PI/180;
+      p.push([h.lat + (h.r/111.32)*Math.sin(rad),
+              h.lng + (h.r/(111.32*Math.cos(h.lat*Math.PI/180)))*Math.cos(rad)]);
+    }
+    return p;
+  }
+  (function(){
+    for(var k in HUB_STATES) HUB_STATES[k].hubs.forEach(function(h){ h.poly = hubRing(h); });
+  })();
+
   var STATE_CFG = {
-    NSW: {label:'New South Wales', outside:'Outside Greater Sydney', zones:true,
-          bounds:[[-34.20,150.52],[-33.52,151.36]], cities:D.cities},
-    VIC: {label:'Victoria',        outside:'Outside Greater Melbourne', zones:false,
-          bounds:[[-38.30,144.45],[-37.45,145.60]], cities:VIC_REGIONS}
+    NSW: {label:'New South Wales', outside:'Outside Greater Sydney', zones:true, city:'Sydney',
+          viewBox:'178 113 108 108', bounds:[[-34.20,150.52],[-33.52,151.36]], cities:D.cities},
+    VIC: {label:'Victoria',        outside:'Outside Greater Melbourne', zones:true, city:'Melbourne',
+          viewBox:'190 175 68 48', bounds:[[-38.30,144.45],[-37.45,145.60]], cities:VIC_REGIONS},
+    QLD: {label:'Queensland',      outside:HUB_STATES.QLD.outside, zones:true, city:'Brisbane', hub:true,
+          viewBox:'163 -14 126 165', insetScale:1.167,
+          bounds:[[-28.30,152.60],[-26.40,153.60]], cities:HUB_STATES.QLD.hubs},
+    SA:  {label:'South Australia', outside:HUB_STATES.SA.outside,  zones:true, city:'Adelaide', hub:true,
+          viewBox:'107 108 95 108', insetScale:0.88,
+          bounds:[[-35.30,138.35],[-34.55,138.95]], cities:HUB_STATES.SA.hubs},
+    ACT: {label:'Australian Capital Territory', outside:HUB_STATES.ACT.outside, zones:true, city:'Canberra', hub:true,
+          viewBox:'245 186 5 7', insetScale:0.046, borrow:{states:['NSW'], lat:-35.2809, lng:149.1300, km:60},
+          bounds:[[-35.50,148.95],[-35.13,149.25]], cities:HUB_STATES.ACT.hubs},
+    TAS: {label:'Tasmania',        outside:HUB_STATES.TAS.outside, zones:true, city:'Hobart', hub:true,
+          viewBox:'217 228 28 26', insetScale:0.259,
+          bounds:[[-43.20,146.70],[-41.10,147.70]], cities:HUB_STATES.TAS.hubs}
   };
 
   function vicRegionOf(lat,lng){
@@ -432,6 +582,7 @@
   }
   function cityOf(lat,lng){
     if(STATE === 'VIC') return vicRegionOf(lat,lng);
+    if(HUB_STATES[STATE]) return hubRegionOf(lat,lng);
     for(var i=0;i<cities.length;i++){
       var poly=cities[i].poly, inside=false, n=poly.length, k=n-1;
       for(var m=0;m<n;m++){
@@ -652,20 +803,40 @@
   var BADGE_AT = {
     'Eastern Harbour City':  [-33.585, 151.245],
     'Central River City':    [-33.605, 150.945],
-    'Western Parkland City': [-33.640, 150.640]
+    'Western Parkland City': [-33.640, 150.640],
+    /* Melbourne has no polygons to anchor to, so each badge sits out in the clear space
+       on its own side of the cluster - north above, west to the left, and so on. */
+    'Northern Melbourne':     [-37.260, 144.959],
+    'Western Melbourne':      [-37.683, 143.669],
+    'Eastern Melbourne':      [-37.574, 145.810],
+    'South-Eastern Melbourne':[-38.246, 145.810],
+    'Inner Melbourne':        [-37.353, 143.861],
+    'Brisbane':               [-27.050, 152.30],
+    'Gold Coast':             [-28.560, 153.55],
+    'Sunshine Coast':         [-26.480, 152.10],
+    'Inner Adelaide':         [-34.640, 138.20],
+    'Northern Adelaide':      [-34.640, 138.90],
+    'Eastern & Hills':        [-35.250, 138.98],
+    'Southern Adelaide':      [-35.250, 138.42],
+    'North Canberra':         [-35.165, 149.05],
+    'South Canberra':         [-35.455, 149.05],
+    'Hobart':                 [-43.070, 147.05],
+    'Launceston':             [-41.230, 147.20]
   };
   var zoneGroup = L.layerGroup(), badgeGroup = L.layerGroup(), badgeMarkers = {};
 
-  /* Only NSW has published boundaries worth drawing; Melbourne's regions are sectors,
-     so VIC gets cards and colours but no outlines pretending to be official. */
+  /* Both states draw their regions. NSW uses the Greater Sydney Commission's Three Cities;
+     VIC draws the compass sectors this map sorts by - indicative, and the notes say so. */
   function rebuildZones(){
     zoneGroup.clearLayers(); badgeGroup.clearLayers(); badgeMarkers = {};
-    if(!STATE_CFG[STATE].zones) return;
+    var drawPoly = STATE_CFG[STATE].zones;
     cities.forEach(function(c){
-      if(!c.poly) return;
-      L.polygon(c.poly, {color:c.colour, weight:1.4, opacity:.4,
-                         fillColor:c.colour, fillOpacity:.05, interactive:false}).addTo(zoneGroup);
-      var at = BADGE_AT[c.name] || c.poly[0];
+      if(drawPoly && c.poly){
+        L.polygon(c.poly, {color:c.colour, weight:1.4, opacity:.4,
+                           fillColor:c.colour, fillOpacity:.05, interactive:false}).addTo(zoneGroup);
+      }
+      var at = BADGE_AT[c.name] || (c.poly && c.poly[0]);
+      if(!at) return;
       badgeMarkers[c.name] = L.marker(at, {icon:L.divIcon({className:'', html:'', iconSize:[205,58], iconAnchor:[102,29]}),
                                            interactive:false}).addTo(badgeGroup);
     });
@@ -797,6 +968,34 @@
     });
   }
   buildCityCards();
+  /* The management read: five figures that answer "is our coverage good enough,
+     and if not, where". Everything here is derived, nothing stored. */
+  function renderKpis(list, stats){
+    var mins = list.map(function(j){ return estimateMinutes(j.d); }).sort(function(a,b){return a-b;});
+    var med  = mins.length ? mins[Math.floor(mins.length/2)] : 0;
+    var over30 = mins.filter(function(m){ return m > 30; }).length;
+    var open = list.filter(function(j){ return j.st === 'Open'; }).length;
+
+    var weakest = null;
+    cities.forEach(function(c){
+      var st = stats[c.name];
+      if(!st || (st.open + st.done) < 5) return;          /* ignore thin samples */
+      if(!weakest || st.med > weakest.med) weakest = {name:c.name, med:st.med};
+    });
+
+    function card(v, k, note, cls){
+      return '<div class="kpi'+(cls?' '+cls:'')+'"><div class="v">'+v+'</div><div class="k">'+k+'</div>'+
+             (note ? '<div class="note">'+note+'</div>' : '')+'</div>';
+    }
+    document.getElementById('kpiRow').innerHTML =
+      card(points.length, 'Locksmiths Mapped', STATE_CFG[STATE].label) +
+      card(list.length, 'Jobs In Range', open + ' Open Work Orders') +
+      card('~'+med+' min', 'Median To Nearest', 'Straight-Line Estimate') +
+      card(over30, 'Jobs Over 30 Min', over30 ? 'Worth A Closer Look' : 'None', over30 > 10 ? 'bad' : (over30 ? 'warn' : '')) +
+      (weakest ? card('~'+weakest.med+' min', 'Weakest Region', weakest.name, 'warn')
+               : card('\u2014', 'Weakest Region', 'Not Enough Jobs'));
+  }
+
   function lsInCity(name){
     var n = 0;
     for(var i=0;i<points.length;i++){ if(cityOf(points[i].lat, points[i].lng) === name) n++; }
@@ -813,8 +1012,8 @@
           '<div class="cc-num"><div class="v">'+lsInCity(c.name)+'</div><div class="k">Locksmiths</div></div>'+
           '<div class="cc-num"><div class="v">'+st.open+'</div><div class="k">Open Work Orders</div></div>'+
           '<div class="cc-num"><div class="v">'+st.done+'</div><div class="k">Completed Jobs</div></div>'+
-          '<div class="cc-num"><div class="v">~'+st.med+' min</div><div class="k">Median to Nearest</div></div>'+
-          '<div class="cc-num"><div class="v">~'+st.worst+' min</div><div class="k">Worst in City</div></div>'+
+          '<div class="cc-num"><div class="v">~'+st.med+' min</div><div class="k">Median To Nearest</div></div>'+
+          '<div class="cc-num"><div class="v">~'+st.worst+' min</div><div class="k">Worst In City</div></div>'+
         '</div>';
       if(!badgeMarkers[c.name]) return;
       badgeMarkers[c.name].setIcon(L.divIcon({className:'', iconSize:[205,58], iconAnchor:[102,29],
@@ -901,6 +1100,8 @@
     var bounds = rebuildJobLayers(list);
     var stats = cityStats(list);
     renderCities(stats);
+    renderKpis(list, stats);
+    renderScopeNote();
     renderJobTable(list);
     renderKeyTable(list);
     var opens = list.filter(function(j){return j.st==='Open';}).length;
@@ -954,51 +1155,131 @@
     if(b.length) map.fitBounds(b, {padding:[30,30]});
   });
 
-  /* ---------- NSW inset ---------- */
-  var svg = document.getElementById('insetSvg'), ns = 'http://www.w3.org/2000/svg';
-  svg.setAttribute('viewBox','178 113 108 108');
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
-  var path = document.createElementNS(ns,'path');
-  path.setAttribute('d', D.nswPath);
-  path.setAttribute('fill','#dfe6ec'); path.setAttribute('stroke','#8fa2b4'); path.setAttribute('stroke-width','1.2');
-  svg.appendChild(path);
-  var box = document.createElementNS(ns,'rect');
-  box.setAttribute('x', D.sydUnit[0]-9); box.setAttribute('y', D.sydUnit[1]-7);
-  box.setAttribute('width',18); box.setAttribute('height',14);
-  box.setAttribute('fill','none'); box.setAttribute('stroke','#cf4034'); box.setAttribute('stroke-width','2');
-  svg.appendChild(box);
-  var dot = document.createElementNS(ns,'circle');
-  dot.setAttribute('cx', D.sydUnit[0]); dot.setAttribute('cy', D.sydUnit[1]); dot.setAttribute('r','2.4');
-  dot.setAttribute('fill','#16212e'); svg.appendChild(dot);
-  var tx = document.createElementNS(ns,'text');
-  tx.setAttribute('x', D.sydUnit[0]+11); tx.setAttribute('y', D.sydUnit[1]+3);
-  tx.setAttribute('font-size','7'); tx.setAttribute('font-family','Inter,sans-serif'); tx.setAttribute('fill','#16212e');
-  tx.textContent = 'Sydney'; svg.appendChild(tx);
+  /* ---------- state locator inset ---------- */
+  var ns = 'http://www.w3.org/2000/svg';
+  function hexRgba(h,a){
+    var n = parseInt(h.slice(1),16);
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+  }
+  function renderScopeNote(){
+    var el = document.getElementById('scopeNote');
+    if(!el) return;
+    var out = jobs.filter(function(j){ return j.city === STATE_CFG[STATE].outside; });
+    var openOut = out.filter(function(j){ return j.st === 'Open'; }).length;
+    var METRO = {NSW:'Greater Sydney', VIC:'Greater Melbourne', QLD:'South East Queensland',
+                 SA:'Greater Adelaide', ACT:'Canberra', TAS:'Hobart and Launceston'};
+    var FRAME = {
+      NSW:'Three Cities zones are indicative bands matching the Greater Sydney Commission\u2019s framing \u2014 not official LGA boundaries.',
+      VIC:'Melbourne\u2019s five regions are compass sectors around the CBD, drawn here for comparison \u2014 there is no official equivalent of Sydney\u2019s Three Cities.',
+      QLD:'Each region is a circle around a named centre, and a job belongs to the nearest one that covers it \u2014 the drawn circles are that rule, not an official boundary.',
+      SA:'Each region is a circle around a named centre, and a job belongs to the nearest one that covers it \u2014 the drawn circles are that rule, not an official boundary.',
+      ACT:'Canberra is split north and south of the lake. Nearest-locksmith distances draw on NSW listings too, because Queanbeyan is 11km from Civic and is genuinely the closest option for much of the city.',
+      TAS:'Each region is a circle around a named centre, and a job belongs to the nearest one that covers it \u2014 the drawn circles are that rule, not an official boundary.'
+    };
+    var metro = METRO[STATE] || STATE_CFG[STATE].label;
+    el.innerHTML = 'Covers <b>all '+STATE+' jobs</b>, not only '+metro.replace('Greater ','')+
+      ' \u2014 the map opens framed on '+metro+', where most of them sit. '+
+      (out.length ? out.length+' job'+(out.length===1?'':'s')+' ('+openOut+' open) fall outside '+metro+
+                    '; zoom out or press Fit All Jobs to see them. ' : '') + (FRAME[STATE]||'');
+  }
+
+  function drawLegendRegions(){
+    var box = document.getElementById('legendRegions');
+    if(!box) return;
+    box.innerHTML = cities.map(function(c){
+      return '<div class="key-row"><span class="sw" style="background:'+hexRgba(c.colour,.25)+
+             '; border-color:'+c.colour+'"></span> '+c.name+'</div>';
+    }).join('');
+  }
+
+  function drawInset(){
+    var svg = document.getElementById('insetSvg');
+    if(!svg) return;
+    var cfg = STATE_CFG[STATE];
+    var d   = STATE_PATH[STATE] || (STATE === 'VIC' ? VIC_PATH : D.nswPath);
+    var at  = STATE_UNIT[STATE] || (STATE === 'VIC' ? MEL_UNIT : D.sydUnit);
+    /* each locator is drawn at its own scale, so the box and dot scale with it */
+    var sc  = cfg.insetScale || (STATE === 'VIC' ? 0.62 : 1);
+    svg.innerHTML = '';
+    svg.setAttribute('viewBox', cfg.viewBox);
+    svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+    svg.setAttribute('aria-label', cfg.label + ' locator');
+    var path = document.createElementNS(ns,'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill','#dfe6ec'); path.setAttribute('stroke','#8fa2b4'); path.setAttribute('stroke-width', 1.2*sc);
+    svg.appendChild(path);
+    var box = document.createElementNS(ns,'rect');
+    box.setAttribute('x', at[0]-9*sc); box.setAttribute('y', at[1]-7*sc);
+    box.setAttribute('width',18*sc); box.setAttribute('height',14*sc);
+    box.setAttribute('fill','none'); box.setAttribute('stroke','#cf4034'); box.setAttribute('stroke-width',2*sc);
+    svg.appendChild(box);
+    var dot = document.createElementNS(ns,'circle');
+    dot.setAttribute('cx', at[0]); dot.setAttribute('cy', at[1]); dot.setAttribute('r', 2.4*sc);
+    dot.setAttribute('fill','#16212e'); svg.appendChild(dot);
+    var tx = document.createElementNS(ns,'text');
+    tx.setAttribute('x', at[0]+11*sc); tx.setAttribute('y', at[1]+3*sc);
+    tx.setAttribute('font-size', 7*sc); tx.setAttribute('font-family','Inter,sans-serif'); tx.setAttribute('fill','#16212e');
+    tx.textContent = cfg.city; svg.appendChild(tx);
+    var cap = document.getElementById('insetCap');
+    if(cap) cap.textContent = cfg.label;
+  }
 
   /* ---------- region table + full locksmith list ---------- */
   var rt = document.getElementById('regionTable');
-  regionRows.forEach(function(r){
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td class="name">'+r.region+'</td><td class="count">'+r.count+'</td>';
-    rt.appendChild(tr);
-  });
   var listBody = document.getElementById('fullListBody'),
       searchInput = document.getElementById('listSearch'),
       regionSelect = document.getElementById('listRegionFilter'),
       listCount = document.getElementById('listCount');
-  regionRows.forEach(function(r){
-    var o = document.createElement('option'); o.value = r.region; o.textContent = r.region; regionSelect.appendChild(o);
-  });
+
+  /* NSW rows carry a proper regional tag from the source data; VIC rows only say "VIC",
+     so there the five Melbourne sectors do the same job and match the cards above. */
+  function regionKeyOf(p){
+    if(STATE !== 'NSW') return cityOf(p.lat, p.lng);
+    return p.r || 'Unclassified';
+  }
+  function buildRegionTable(){
+    var tally = {}, order = [];
+    points.forEach(function(p){
+      var k = regionKeyOf(p);
+      if(tally[k] === undefined){ tally[k] = 0; order.push(k); }
+      tally[k]++;
+    });
+    if(STATE === 'NSW'){
+      var rank = {};
+      regionRows.forEach(function(r,i){ rank[r.region] = i; });
+      order.sort(function(a,b){
+        var ra = rank[a] === undefined ? 999 : rank[a], rb = rank[b] === undefined ? 999 : rank[b];
+        return ra - rb;
+      });
+    } else {
+      var crank = {};
+      cities.forEach(function(c,i){ crank[c.name] = i; });
+      order.sort(function(a,b){
+        var ra = crank[a] === undefined ? 999 : crank[a], rb = crank[b] === undefined ? 999 : crank[b];
+        return ra - rb;
+      });
+    }
+    rt.innerHTML = '';
+    regionSelect.innerHTML = '<option value="">All Regions</option>';
+    order.forEach(function(k){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="name">'+k+'</td><td class="count">'+tally[k]+'</td>';
+      rt.appendChild(tr);
+      var o = document.createElement('option'); o.value = k; o.textContent = k;
+      regionSelect.appendChild(o);
+    });
+  }
   function renderList(){
     var q = searchInput.value.trim().toLowerCase(), region = regionSelect.value, shown = 0;
     listBody.innerHTML = '';
     points.forEach(function(p){
-      if(region && p.r !== region) return;
+      var rk = regionKeyOf(p);
+      if(region && rk !== region) return;
       if(q && p.n.toLowerCase().indexOf(q)<0 && p.a.toLowerCase().indexOf(q)<0) return;
       shown++;
       var tr = document.createElement('tr');
       tr.innerHTML = '<td class="name">'+p.n+'</td><td>'+p.a+'</td>'+
-                     '<td class="addr-cell">'+p.r+'</td>'+
+                     '<td class="addr-cell">'+rk+'</td>'+
                      '<td class="addr-cell">'+p.addr.replace(', Australia','')+'</td>';
       listBody.appendChild(tr);
     });
@@ -1006,7 +1287,6 @@
   }
   searchInput.addEventListener('input', renderList);
   regionSelect.addEventListener('change', renderList);
-  renderList();
 
   /* ---------- go ---------- */
   /* Everything downstream of here is per-state: a NSW job must never be scored against
@@ -1014,7 +1294,14 @@
   function applyState(){
     var cfg = STATE_CFG[STATE];
     cities = cfg.cities;
-    points = allPoints.filter(function(p){ return p.state === STATE; });
+    /* A state normally uses its own locksmiths. ACT also draws on nearby NSW ones,
+       because Queanbeyan is 11km from Civic - but only the nearby ones, or the whole
+       NSW list would be counted as Canberra coverage. */
+    points = allPoints.filter(function(p){
+      if(p.state === STATE) return true;
+      if(!cfg.borrow || cfg.borrow.states.indexOf(p.state) < 0) return false;
+      return haversine(p.lat, p.lng, cfg.borrow.lat, cfg.borrow.lng) <= cfg.borrow.km;
+    });
     jobs   = allJobs.filter(function(j){ return j.state === STATE; })
                     .map(function(j){ j.city = cityOf(j.lat, j.lng); return attachNearest(j); });
 
@@ -1035,18 +1322,38 @@
     }
   }
 
+  var PH_SUB = {
+    NSW:'New South Wales \u2014 Greater Sydney and the regions, against the Three Cities framing',
+    VIC:'Victoria \u2014 Greater Melbourne and the regions, split into five sectors',
+    QLD:'Queensland \u2014 Brisbane, the Gold and Sunshine Coasts, and the regional centres',
+    SA:'South Australia \u2014 Adelaide split four ways, plus the regions',
+    ACT:'Australian Capital Territory \u2014 Canberra north and south of the lake',
+    TAS:'Tasmania \u2014 Hobart and Launceston, and everything between'
+  };
   var TAGLINE = {NSW:'Three Cities. Stronger Communities. Faster Call-outs.',
-                 VIC:'Five Regions. Every Job Within Reach.'};
+                 VIC:'Five Regions. Every Job Within Reach.',
+                 QLD:'Brisbane, The Coasts And The Regions.',
+                 SA:'One City. Four Corners. Every Job Covered.',
+                 ACT:'North And South Of The Lake.',
+                 TAS:'Two Cities, End To End.'};
   function redrawForState(){
     applyState();
     var tg = document.getElementById('tagline');
     if(tg) tg.textContent = TAGLINE[STATE];
+    var ft = document.getElementById('footTitle');
+    if(ft) ft.innerHTML = 'DDL Group &middot; ' + STATE + ' Locksmith Network';
+    var zl = document.getElementById('zoneLabel');
+    if(zl) zl.textContent = STATE === 'NSW' ? ' Three Cities Zones'
+                          : STATE === 'VIC' ? ' Melbourne Region Sectors' : ' Region Circles';
+    var ps = document.getElementById('phSub');
+    if(ps) ps.textContent = PH_SUB[STATE] || STATE_CFG[STATE].label;
     cities = STATE_CFG[STATE].cities;
     buildCityCards();
+    drawLegendRegions();
+    drawInset();
     rebuildZones();
-    var zw = document.getElementById('tZone');
-    if(zw && zw.parentElement) zw.parentElement.style.display = STATE_CFG[STATE].zones ? '' : 'none';
     drawLocksmiths();
+    buildRegionTable();
     renderList();
     var sub = document.getElementById('allSub');
     if(sub) sub.innerHTML = 'All '+points.length+' businesses &mdash; search by name/suburb or filter by region';
@@ -1071,6 +1378,8 @@
   var loaded = 0, failed = false;
   function loadError(e){
     if(failed) return; failed = true;
+    var v = document.getElementById('veil');
+    if(v) v.style.display = 'none';
     if(e && e.message === 'SESSION_EXPIRED'){ sessionExpired(); return; }
     document.getElementById('loadMsg').innerHTML =
       'Could not load data from Supabase (' + (e && e.message ? e.message : 'network error') + '). ' +
@@ -1079,6 +1388,8 @@
   }
   function maybeStart(){
     if(++loaded < 2 || failed) return;
+    var v = document.getElementById('veil');
+    if(v) v.style.display = 'none';
     var el = document.getElementById('loadMsg');
     el.textContent = allPoints.length + ' locksmiths \u00b7 ' + allJobs.length + ' jobs loaded from Supabase';
     el.className = 'load-msg ok';
@@ -1177,6 +1488,8 @@
     gate.style.display = 'none';
     var el = document.getElementById('loadMsg');
     if(el){ el.style.display = ''; }
+    var v = document.getElementById('veil');
+    if(v) v.style.display = '';
     loadData();
   }
 
