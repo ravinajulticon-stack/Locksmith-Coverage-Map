@@ -643,9 +643,22 @@
     if(mins<=20) return '#e0a32e';
     return '#cf4034';
   }
+  /* Take the chip colour from whichever state's region list is loaded, so it always
+     matches the cards and the legend. Hardcoding the three Sydney names left every
+     other state's chips grey. Grey stays for the outside-the-metro bucket. */
   function cityColour(c){
-    return c==='Eastern Harbour City'?'#1f6fb2':c==='Central River City'?'#d2691e':
-           c==='Western Parkland City'?'#2e7d4f':'#5d6b7a';
+    for(var i=0;i<cities.length;i++) if(cities[i].name === c) return cities[i].colour;
+    return '#5d6b7a';
+  }
+  var CITY_SHORT = {
+    'Outside Greater Sydney':'Outside GS', 'Outside Greater Melbourne':'Outside GM',
+    'Outside Canberra':'Outside ACT',      'Regional Queensland':'Regional QLD',
+    'Regional South Australia':'Regional SA', 'Regional Tasmania':'Regional TAS'
+  };
+  /* The region name repeats its city on every row, so drop it from the chip - the
+     column is already headed City and the state switch says which one. */
+  function cityLabel(c){
+    return CITY_SHORT[c] || c.replace(/ (City|Melbourne|Adelaide|Canberra)$/, '');
   }
   function fmtDate(iso){
     var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1091,7 +1104,7 @@
         '<td><span class="pill" style="background:'+(j.st==='Done'?'#4f7fa8':'#1b7f4b')+'">'+j.st+'</span></td>'+
         '<td class="addr-cell">'+fmtDate(g.last)+'</td>'+
         '<td><span class="pill" style="background:'+cityColour(j.city)+'">'+
-          j.city.replace(' City','').replace('Outside Greater Sydney','Outside GS')+'</span></td>'+
+          cityLabel(j.city)+'</span></td>'+
         '<td class="mins" style="color:'+col+';font-weight:600">~'+mins+'&nbsp;min</td>'+
         '<td class="addr-cell">'+j.ls+' &middot; '+j.d.toFixed(1)+' km</td>';
       jobBody.appendChild(tr);
