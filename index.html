@@ -174,6 +174,15 @@
   .toolbar button:hover{background:var(--surface-2);}
 
   /* ---- page header + KPI strip: the management half ---- */
+  /* The five figures stay put while you scroll the detail underneath, so you never lose
+     which state you are looking at. Negative margins bleed it over the body padding so
+     content passes behind the edges, not beside them. */
+  .topbar{position:sticky; top:0; z-index:1100; background:var(--bg);
+          margin:-22px -26px 14px; padding:18px 26px 10px;
+          border-bottom:1px solid var(--line);}
+  .topbar .kpi-row{margin-bottom:0;}
+  /* On a short window a pinned strip would eat the view, so let it scroll away instead. */
+  @media (max-height:620px){ .topbar{position:static; margin:0 0 14px; padding:0; border-bottom:0;} }
   .page-head{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin:0 0 12px;}
   .ph-h1{margin:0; font-size:clamp(1.15rem,2.2vw,1.6rem); letter-spacing:-.3px;}
   .ph-sub{color:var(--muted); font-size:.82rem; margin-top:2px;}
@@ -247,6 +256,7 @@
 
 <div class="load-msg" id="loadMsg">Loading locksmiths and jobs from Supabase…</div>
 
+<div class="topbar">
 <div class="page-head">
   <div class="ph-title">
     <h1 class="ph-h1">DDL &ndash; Locksmith Coverage</h1>
@@ -263,6 +273,7 @@
 </div>
 
 <div class="kpi-row" id="kpiRow"></div>
+</div><!-- /topbar -->
 
 <div id="mapFrame">
   <div id="leafletMap"></div>
