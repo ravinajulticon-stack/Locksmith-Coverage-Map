@@ -115,6 +115,7 @@
   .city-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(235px,1fr)); gap:12px; margin:0 0 6px;}
   @media (max-width:560px){.city-row{grid-template-columns:1fr;}}
   .scope-note{color:var(--muted); font-size:.78rem; margin:8px 0 4px; line-height:1.5;}
+  .skip-note{color:var(--mid); font-weight:600;}
   .city-card{background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--cc,#1b3a5c);
              border-radius:11px; padding:13px 15px; box-shadow:var(--shadow);}
   .city-card .cc-name{font-weight:700; font-size:.95rem;}
@@ -430,6 +431,7 @@
   var SB_URL = 'https://tfpgywqmwnjesesfcmcg.supabase.co', SB_KEY = 'sb_publishable_j6MIouzm484dXuHqH76JNw_39ol8cBx';
   var points = [], jobs = [], regionRows = D.regionRows, cities = D.cities;
   var allPoints = [], allJobs = [], STATE = 'NSW';
+  var SKIPPED = {noState:0, otherState:0, states:{}};   /* rows no state tab can show */
 
   /* Sydney's Three Cities come from the Greater Sydney Commission. Melbourne has no
      equivalent published framing, so its regions are plain compass sectors around the
@@ -1258,7 +1260,22 @@
     el.innerHTML = 'Covers <b>all '+STATE+' jobs</b>, not only '+metro.replace('Greater ','')+
       ' \u2014 the map opens framed on '+metro+', where most of them sit. '+
       (out.length ? out.length+' job'+(out.length===1?'':'s')+' ('+openOut+' open) fall outside '+metro+
-                    '; zoom out or press Fit All Jobs to see them. ' : '') + (FRAME[STATE]||'');
+                    '; zoom out or press Fit All Jobs to see them. ' : '') + (FRAME[STATE]||'') +
+      skippedNote();
+  }
+  /* Whatever no tab can show gets said out loud. Quietly dropping rows is how the
+     1000-row truncation went unnoticed for a week. */
+  function skippedNote(){
+    var bits = [];
+    if(SKIPPED.noState)
+      bits.push(SKIPPED.noState+' with no state recorded in ServiceM8');
+    if(SKIPPED.otherState)
+      bits.push(SKIPPED.otherState+' in '+Object.keys(SKIPPED.states).join(', ')+
+                ', which '+(SKIPPED.otherState===1?'has':'have')+' no tab here');
+    if(!bits.length) return '';
+    var n = SKIPPED.noState + SKIPPED.otherState;
+    return ' <span class="skip-note">Not counted anywhere on this map: '+n+' job'+(n===1?'':'s')+
+           ' — '+bits.join(' and ')+'.</span>';
   }
 
   function drawLegendRegions(){
@@ -1493,14 +1510,27 @@
 
   sbFetch('locksmith_jobs', function(err, rows){
     if(err) return loadError(err);
-    jobRows = (rows||[])
-      .filter(function(r){ return r.lat && r.lng && r.job_date &&
-                                  (r.status === 'Work Order' || r.status === 'Completed'); })
-      .map(function(r){
-        return {c:r.customer||'(no name)', a:r.suburb||'', lat:+r.lat, lng:+r.lng,
-                st:(r.status === 'Work Order' ? 'Open' : 'Done'), dt:String(r.job_date).slice(0,10),
-                state:(r.state||'NSW')};
-      });
+    var usable = (rows||[]).filter(function(r){
+      return r.lat && r.lng && r.job_date &&
+             (r.status === 'Work Order' || r.status === 'Completed'); });
+    /* A job with no state used to default to NSW. ServiceM8 sends a handful with no
+       address at all, and they all carry the same fallback coordinates, so five of them
+       were counted as NSW, drawn in Melbourne, matched to a shop 260km away and left
+       sitting at the top of the worst-coverage list. Keep them out, and say so below
+       rather than dropping them silently. */
+    SKIPPED = {noState:0, otherState:0, states:{}};
+    jobRows = [];
+    usable.forEach(function(r){
+      if(!r.state){ SKIPPED.noState++; return; }
+      if(!STATE_CFG[r.state]){
+        SKIPPED.otherState++;
+        SKIPPED.states[r.state] = (SKIPPED.states[r.state]||0) + 1;
+        return;
+      }
+      jobRows.push({c:r.customer||'(no name)', a:r.suburb||'', lat:+r.lat, lng:+r.lng,
+                    st:(r.status === 'Work Order' ? 'Open' : 'Done'),
+                    dt:String(r.job_date).slice(0,10), state:r.state});
+    });
     allJobs = jobRows;
     var dates = jobRows.map(function(j){ return j.dt; }).sort();
     if(dates.length){
