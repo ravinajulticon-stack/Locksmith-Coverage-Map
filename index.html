@@ -366,7 +366,7 @@
     <div class="list-count" id="jobCount"></div>
     <div class="list-scroll">
       <table>
-        <thead><tr><th>Customer / Job</th><th>Suburb</th><th>Status</th><th>Date</th><th>City</th><th class="mins">Est. Drive</th><th>Nearest Locksmith</th></tr></thead>
+        <thead><tr><th>Customer / Job</th><th>Address</th><th>Status</th><th>Date</th><th>City</th><th class="mins">Est. Drive</th><th>Nearest Locksmith</th></tr></thead>
         <tbody id="woBody"></tbody>
       </table>
     </div>
@@ -1087,12 +1087,20 @@
       jobCount = document.getElementById('jobCount'),
       keyBody = document.getElementById('keyBody');
 
+  /* Addresses come out of ServiceM8 with a line break between the street and the
+     suburb. The browser draws that as a space, so a row reads "25 Salt Water
+     Crescent Kingscliff NSW 2487" while the stored string holds a newline, and
+     searching exactly what is on screen matched nothing on 1,102 of 1,338 jobs.
+     Collapsing runs of whitespace on both the query and the value makes full and
+     partial addresses searchable as they appear, without touching the data. */
+  function sq(v){ return String(v||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
   function renderJobTable(list){
-    var st = jobStatus.value, q = jobSearch.value.trim().toLowerCase();
+    var st = jobStatus.value, q = sq(jobSearch.value);
     var rows = groupSites(list).filter(function(g){
       if(st && g.j.st !== st) return false;
-      if(q && g.j.c.toLowerCase().indexOf(q)<0 && g.j.a.toLowerCase().indexOf(q)<0 &&
-         g.j.ls.toLowerCase().indexOf(q)<0) return false;
+      if(q && sq(g.j.c).indexOf(q)<0 && sq(g.j.a).indexOf(q)<0 &&
+         sq(g.j.ls).indexOf(q)<0) return false;
       return true;
     }).sort(function(a,b){ return b.j.d - a.j.d; });
     jobBody.innerHTML = '';
@@ -1378,7 +1386,7 @@
     points.forEach(function(p){
       var rk = regionKeyOf(p);
       if(region && rk !== region) return;
-      if(q && p.n.toLowerCase().indexOf(q)<0 && p.a.toLowerCase().indexOf(q)<0) return;
+      if(q && sq(p.n).indexOf(q)<0 && sq(p.a).indexOf(q)<0 && sq(p.addr).indexOf(q)<0) return;
       shown++;
       var tr = document.createElement('tr');
       tr.innerHTML = '<td class="name">'+p.n+'</td><td>'+p.a+'</td>'+
